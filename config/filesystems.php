@@ -38,6 +38,13 @@ return [
             'report' => false,
         ],
 
+        'dicom' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/dicom'),
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
