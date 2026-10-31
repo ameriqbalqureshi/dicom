@@ -46,6 +46,10 @@
                 </div>
 
                 <div class="flex items-center gap-4 text-sm">
+                    @if (auth()->user()->isPhysician())
+                        <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.edit') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Profile</a>
+                    @endif
+
                     <span class="text-slate-400">
                         {{ auth()->user()->name }}
                         <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">{{ auth()->user()->role->label() }}</span>

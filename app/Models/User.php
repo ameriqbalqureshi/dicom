@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -25,6 +26,9 @@ class User extends Authenticatable
         'email',
         'role',
         'password',
+        'qualifications',
+        'registration_number',
+        'signature_path',
     ];
 
     /**
@@ -35,7 +39,13 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'signature_path',
     ];
+
+    /**
+     * The disk physicians' signature images are kept on. It is private: signatures are only embedded in report PDFs.
+     */
+    public const SIGNATURE_DISK = 'local';
 
     /**
      * Get the attributes that should be cast.
@@ -59,6 +69,20 @@ class User extends Authenticatable
     public function isPhysician(): bool
     {
         return $this->role === Role::Physician;
+    }
+
+    /**
+     * The signature image as a data URI, for embedding in report PDFs, or null if the user has not uploaded one.
+     */
+    public function signatureDataUri(): ?string
+    {
+        $disk = Storage::disk(self::SIGNATURE_DISK);
+
+        if ($this->signature_path === null || ! $disk->exists($this->signature_path)) {
+            return null;
+        }
+
+        return 'data:'.$disk->mimeType($this->signature_path).';base64,'.base64_encode($disk->get($this->signature_path));
     }
 
     /**
@@ -87,5 +111,13 @@ class User extends Authenticatable
     public function sharesMade(): HasMany
     {
         return $this->hasMany(StudyShare::class, 'shared_by');
+    }
+
+    /**
+     * @return HasMany<Report, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class, 'author_id');
     }
 }

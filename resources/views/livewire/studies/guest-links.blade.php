@@ -6,7 +6,7 @@
 
     <div class="flex flex-col gap-4 border-t border-slate-800 p-4">
         <p class="text-xs text-slate-400">
-            A guest link lets someone without an account view this study for {{ $lifetimeHours }} hours. They cannot download, share or change it.
+            A guest link lets someone without an account view this study for {{ $lifetimeHours }} hours. They can read its final reports, but cannot download the images, share or change it.
         </p>
 
         @if ($status)

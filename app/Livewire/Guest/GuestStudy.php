@@ -78,6 +78,9 @@ class GuestStudy extends Component
         return view('livewire.guest.guest-study', [
             'link' => $link,
             'study' => $link?->study,
+            'reports' => $link?->isUnlocked()
+                ? $link->study->reports()->final()->with(['author', 'addenda'])->oldest('finalized_at')->get()
+                : collect(),
             'viewerSeries' => $link?->isUnlocked()
                 ? ViewerSeries::forStudy($link->study, fn (DicomInstance $instance): string => route('guest.instances.file', [$this->token, $instance]))
                 : [],

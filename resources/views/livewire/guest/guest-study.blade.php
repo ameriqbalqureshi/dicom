@@ -38,6 +38,26 @@
             </p>
         </div>
 
+        @if ($reports->isNotEmpty())
+            <section class="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+                <h2 class="text-sm font-medium">Reports</h2>
+
+                @foreach ($reports as $report)
+                    <article wire:key="report-{{ $report->id }}" class="flex flex-col gap-3 rounded-md border border-slate-800 p-4 text-sm">
+                        <header class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div class="font-medium">{{ $report->authorName() }}</div>
+                                <div class="text-xs text-slate-400">Signed {{ $report->finalized_at->toDayDateTimeString() }}</div>
+                            </div>
+                            <a href="{{ route('guest.reports.pdf', [$token, $report]) }}" target="_blank" class="text-sky-400 hover:text-sky-300">Download PDF</a>
+                        </header>
+
+                        @include('reports.partials.body', ['report' => $report])
+                    </article>
+                @endforeach
+            </section>
+        @endif
+
         @if ($viewerSeries === [])
             <p class="rounded-xl border border-slate-800 px-4 py-10 text-center text-slate-400">This study has no images.</p>
         @else

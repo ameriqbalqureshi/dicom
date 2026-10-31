@@ -27,6 +27,8 @@
         @endcan
     </div>
 
+    <livewire:studies.study-reports :study="$study" />
+
     @can('share', $study)
         <livewire:studies.share-study :study="$study" />
     @endcan

@@ -103,6 +103,16 @@ class Study extends Model
     }
 
     /**
+     * Physicians' reports on this study, including drafts only their authors may see.
+     *
+     * @return HasMany<Report, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class);
+    }
+
+    /**
      * Limit studies to those the user may view: their own uploads and studies shared with them,
      * or every study for administrators. Expired studies are hidden from everyone.
      *
