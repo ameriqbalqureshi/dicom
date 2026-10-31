@@ -2,10 +2,12 @@
 
 namespace App\Livewire\Studies;
 
+use App\Enums\Role;
 use App\Models\Study;
 use App\Services\Dicom\DicomImporter;
 use App\Services\Dicom\DuplicateDicomInstanceException;
 use App\Services\Dicom\InvalidDicomFileException;
+use App\Services\Dicom\StudyLimitReachedException;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -89,7 +91,7 @@ class UploadStudies extends Component
             return ['name' => $name, 'status' => 'imported', 'message' => 'Imported.', 'studyId' => $instance->series->study_id];
         } catch (DuplicateDicomInstanceException) {
             return ['name' => $name, 'status' => 'skipped', 'message' => 'Already uploaded.', 'studyId' => null];
-        } catch (InvalidDicomFileException $exception) {
+        } catch (InvalidDicomFileException|StudyLimitReachedException $exception) {
             return ['name' => $name, 'status' => 'failed', 'message' => $exception->getMessage(), 'studyId' => null];
         } finally {
             $file->delete();
@@ -98,6 +100,11 @@ class UploadStudies extends Component
 
     public function render(): View
     {
-        return view('livewire.studies.upload-studies');
+        $user = auth()->user();
+
+        return view('livewire.studies.upload-studies', [
+            'isPatient' => $user->role === Role::Patient,
+            'currentStudy' => $user->role === Role::Patient ? $user->uploadedStudies()->unexpired()->first() : null,
+        ]);
     }
 }

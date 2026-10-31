@@ -2,7 +2,10 @@
 
 use App\Enums\Role;
 use App\Livewire\Users\UserIndex;
+use App\Models\Study;
+use App\Models\StudyShare;
 use App\Models\User;
+use App\Services\StudySharing;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
@@ -59,18 +62,18 @@ test('email addresses must be unique', function () {
 });
 
 test('an unknown role is rejected', function () {
-    $user = User::factory()->radiologist()->create();
+    $user = User::factory()->physician()->create();
 
     Livewire::actingAs(User::factory()->admin()->create())
         ->test(UserIndex::class)
         ->call('updateRole', $user->id, 'superuser')
         ->assertHasErrors(['role']);
 
-    expect($user->fresh()->role)->toBe(Role::Radiologist);
+    expect($user->fresh()->role)->toBe(Role::Physician);
 });
 
 test('administrators can change another user\'s role', function () {
-    $user = User::factory()->radiologist()->create();
+    $user = User::factory()->physician()->create();
 
     Livewire::actingAs(User::factory()->admin()->create())
         ->test(UserIndex::class)
@@ -85,7 +88,7 @@ test('administrators cannot change their own role', function () {
 
     Livewire::actingAs($admin)
         ->test(UserIndex::class)
-        ->call('updateRole', $admin->id, Role::Radiologist->value)
+        ->call('updateRole', $admin->id, Role::Physician->value)
         ->assertHasErrors(['users' => 'You cannot change your own role.']);
 
     expect($admin->fresh()->role)->toBe(Role::Admin);
@@ -120,4 +123,32 @@ test('non-administrators cannot call user management actions', function () {
         ->assertForbidden();
 
     $this->assertModelExists($user);
+});
+
+test('a physician who changes role loses the studies shared with them and everything they forwarded', function () {
+    $study = Study::factory()->create();
+    [$physician, $surgeon] = User::factory()->physician()->count(2)->create();
+    $sharing = app(StudySharing::class);
+    $sharing->share($study, $study->uploader, $physician);
+    $sharing->share($study, $physician, $surgeon);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test(UserIndex::class)
+        ->call('updateRole', $physician->id, Role::Technician->value);
+
+    expect(StudyShare::count())->toBe(0);
+});
+
+test('deleting a user removes every share they made or received', function () {
+    $study = Study::factory()->create();
+    [$physician, $surgeon] = User::factory()->physician()->count(2)->create();
+    $sharing = app(StudySharing::class);
+    $sharing->share($study, $study->uploader, $physician);
+    $sharing->share($study, $physician, $surgeon);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test(UserIndex::class)
+        ->call('deleteUser', $physician->id);
+
+    expect(StudyShare::count())->toBe(0);
 });

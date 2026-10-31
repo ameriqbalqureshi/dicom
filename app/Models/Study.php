@@ -16,6 +16,11 @@ class Study extends Model
     use HasFactory;
 
     /**
+     * How long a patient's study stays available before it is deleted.
+     */
+    public const PATIENT_STUDY_LIFETIME_DAYS = 7;
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -30,6 +35,7 @@ class Study extends Model
         'study_description',
         'accession_number',
         'uploaded_by',
+        'expires_at',
     ];
 
     /**
@@ -42,7 +48,16 @@ class Study extends Model
         return [
             'patient_birth_date' => 'date',
             'study_date' => 'date',
+            'expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether the study is past its expiry date and waiting to be deleted. Only patients' studies expire.
+     */
+    public function isExpired(): bool
+    {
+        return $this->expires_at?->isPast() ?? false;
     }
 
     /**
@@ -70,15 +85,69 @@ class Study extends Model
     }
 
     /**
-     * Limit studies to those the user may view: their own uploads, or every study for administrators.
+     * The physicians this study has been shared with, by its owner or by forwarding, including pending shares.
+     *
+     * @return HasMany<StudyShare, $this>
+     */
+    public function shares(): HasMany
+    {
+        return $this->hasMany(StudyShare::class);
+    }
+
+    /**
+     * @return HasMany<GuestLink, $this>
+     */
+    public function guestLinks(): HasMany
+    {
+        return $this->hasMany(GuestLink::class);
+    }
+
+    /**
+     * Limit studies to those the user may view: their own uploads and studies shared with them,
+     * or every study for administrators. Expired studies are hidden from everyone.
      *
      * @param  Builder<Study>  $query
      */
     public function scopeVisibleTo(Builder $query, User $user): void
     {
-        if (! $user->isAdmin()) {
-            $query->whereBelongsTo($user, 'uploader');
+        $query->unexpired();
+
+        if ($user->isAdmin()) {
+            return;
         }
+
+        $query->where(fn (Builder $query) => $query
+            ->whereBelongsTo($user, 'uploader')
+            ->orWhere(fn (Builder $query) => $query->sharedWith($user)));
+    }
+
+    /**
+     * Limit studies to those shared with the user that they can open, optionally only those a given person shared.
+     *
+     * @param  Builder<Study>  $query
+     */
+    public function scopeSharedWith(Builder $query, User $user, ?User $sharer = null): void
+    {
+        $query->whereHas('shares', fn (Builder $query) => $query
+            ->accepted()
+            ->whereBelongsTo($user, 'recipient')
+            ->when($sharer, fn (Builder $query) => $query->whereBelongsTo($sharer, 'sharer')));
+    }
+
+    /**
+     * @param  Builder<Study>  $query
+     */
+    public function scopeUnexpired(Builder $query): void
+    {
+        $query->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()));
+    }
+
+    /**
+     * @param  Builder<Study>  $query
+     */
+    public function scopeExpired(Builder $query): void
+    {
+        $query->where('expires_at', '<=', now());
     }
 
     /**

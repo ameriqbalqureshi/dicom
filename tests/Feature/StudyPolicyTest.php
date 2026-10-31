@@ -25,7 +25,7 @@ test('users cannot view or delete studies uploaded by someone else', function (R
 
     expect($user->can('view', $study))->toBeFalse()
         ->and($user->can('delete', $study))->toBeFalse();
-})->with([Role::Radiologist, Role::Technician]);
+})->with([Role::Technician, Role::Physician, Role::Patient]);
 
 test('administrators can view and delete every study', function () {
     $admin = User::factory()->admin()->create();
@@ -42,5 +42,5 @@ test('only administrators can manage users', function (Role $role, bool $allowed
 })->with([
     'admin' => [Role::Admin, true],
     'technician' => [Role::Technician, false],
-    'radiologist' => [Role::Radiologist, false],
+    'physician' => [Role::Physician, false],
 ]);

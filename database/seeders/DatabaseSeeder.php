@@ -20,14 +20,19 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin@example.com',
         ]);
 
-        User::factory()->radiologist()->create([
-            'name' => 'Radiologist User',
-            'email' => 'radiologist@example.com',
+        User::factory()->physician()->create([
+            'name' => 'Physician User',
+            'email' => 'physician@example.com',
         ]);
 
         User::factory()->technician()->create([
             'name' => 'Technician User',
             'email' => 'technician@example.com',
+        ]);
+
+        User::factory()->patient()->create([
+            'name' => 'Patient User',
+            'email' => 'patient@example.com',
         ]);
     }
 }

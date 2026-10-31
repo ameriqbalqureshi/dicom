@@ -13,6 +13,28 @@
         <p class="rounded-md border border-emerald-800 bg-emerald-950 px-4 py-2 text-sm text-emerald-300">{{ session('status') }}</p>
     @endif
 
+    @if ($pendingShareCount > 0)
+        <a href="{{ route('shares.pending') }}" class="rounded-md border border-sky-800 bg-sky-950 px-4 py-2 text-sm text-sky-300 hover:bg-sky-900">
+            {{ $pendingShareCount }} {{ Str::plural('study', $pendingShareCount) }} from patients {{ $pendingShareCount === 1 ? 'is' : 'are' }} waiting for you to accept. Review &rarr;
+        </a>
+    @endif
+
+    @if ($sharers->isNotEmpty() || $from !== null)
+        <nav class="flex flex-wrap items-center gap-2 text-sm" aria-label="Study owners">
+            <a href="{{ route('studies.index') }}"
+                @class(['rounded-full border px-3 py-1', 'border-sky-600 bg-sky-950/60 text-white' => $from === null, 'border-slate-700 text-slate-300 hover:border-slate-500' => $from !== null])>
+                {{ auth()->user()->isAdmin() ? 'All studies' : 'My studies' }}
+            </a>
+            <span class="ml-2 text-xs uppercase tracking-wide text-slate-500">Shared with you by</span>
+            @foreach ($sharers as $person)
+                <a href="{{ route('studies.index', ['from' => $person->id]) }}" wire:key="sharer-{{ $person->id }}"
+                    @class(['rounded-full border px-3 py-1', 'border-sky-600 bg-sky-950/60 text-white' => $from === $person->id, 'border-slate-700 text-slate-300 hover:border-slate-500' => $from !== $person->id])>
+                    {{ $person->name }} <span class="text-slate-400">({{ $person->shared_studies_count }})</span>
+                </a>
+            @endforeach
+        </nav>
+    @endif
+
     <div class="flex flex-wrap gap-3">
         <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search patient, ID, accession or description…"
             aria-label="Search studies"
@@ -46,6 +68,9 @@
                             <a href="{{ route('studies.show', $study) }}" class="font-medium text-sky-400 hover:text-sky-300">
                                 {{ $study->patient_name ?? 'Unknown patient' }}
                             </a>
+                            @if ($study->expires_at)
+                                <div class="text-xs text-amber-300">Deleted {{ $study->expires_at->diffForHumans() }}</div>
+                            @endif
                         </td>
                         <td class="px-4 py-3 text-slate-300">{{ $study->patient_id ?? '—' }}</td>
                         <td class="px-4 py-3 text-slate-300">{{ $study->study_date?->format('Y-m-d') ?? '—' }}</td>
@@ -62,7 +87,13 @@
                 @empty
                     <tr>
                         <td colspan="6" class="px-4 py-10 text-center text-slate-400">
-                            {{ $search !== '' || $modality !== '' ? 'No studies match your filters.' : 'No studies have been uploaded yet.' }}
+                            @if ($search !== '' || $modality !== '')
+                                No studies match your filters.
+                            @elseif ($from !== null)
+                                No studies are shared with you by this person.
+                            @else
+                                No studies have been uploaded yet.
+                            @endif
                         </td>
                     </tr>
                 @endforelse

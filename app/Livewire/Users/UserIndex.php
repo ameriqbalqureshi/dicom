@@ -4,6 +4,7 @@ namespace App\Livewire\Users;
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Services\StudySharing;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -20,7 +21,7 @@ class UserIndex extends Component
 
     public string $password = '';
 
-    public string $role = Role::Radiologist->value;
+    public string $role = Role::Physician->value;
 
     public ?string $status = null;
 
@@ -52,7 +53,10 @@ class UserIndex extends Component
         $this->status = 'User created.';
     }
 
-    public function updateRole(int $userId, string $role): void
+    /**
+     * Change a user's role. Only physicians can receive shared studies, so anyone who stops being one loses them.
+     */
+    public function updateRole(int $userId, string $role, StudySharing $sharing): void
     {
         $this->authorize('manage-users');
 
@@ -67,10 +71,14 @@ class UserIndex extends Component
         }
 
         $user->update(['role' => $role]);
+
+        if (! $user->isPhysician()) {
+            $sharing->revokeReceivedBy($user);
+        }
         $this->status = "{$user->name} is now a ".Role::from($role)->label().'.';
     }
 
-    public function deleteUser(int $userId): void
+    public function deleteUser(int $userId, StudySharing $sharing): void
     {
         $this->authorize('manage-users');
 
@@ -82,6 +90,7 @@ class UserIndex extends Component
             return;
         }
 
+        $sharing->revokeInvolving($user);
         $user->delete();
         $this->status = "{$user->name} was deleted.";
     }

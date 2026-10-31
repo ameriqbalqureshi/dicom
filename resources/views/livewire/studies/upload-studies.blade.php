@@ -6,6 +6,17 @@
         </p>
     </div>
 
+    @if ($isPatient)
+        <p class="rounded-md border border-amber-800 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
+            @if ($currentStudy)
+                Your study <a href="{{ route('studies.show', $currentStudy) }}" class="font-medium underline">{{ $currentStudy->study_description ?? $currentStudy->patient_name ?? 'Study' }}</a>
+                is available until {{ $currentStudy->expires_at->toDayDateTimeString() }}. You can add missing images to it; a new study can be uploaded once it expires.
+            @else
+                You can upload one study. It stays available for {{ App\Models\Study::PATIENT_STUDY_LIFETIME_DAYS }} days and is then deleted automatically.
+            @endif
+        </p>
+    @endif
+
     <div x-data="{ uploading: false, progress: 0, failed: false }"
         x-on:livewire-upload-start="uploading = true; failed = false; progress = 0"
         x-on:livewire-upload-progress="progress = $event.detail.progress"

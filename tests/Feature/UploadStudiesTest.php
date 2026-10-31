@@ -65,7 +65,7 @@ test('uploading a DICOM file immediately creates its study, series and instance'
 
 test('a study uploaded by two users becomes an independent copy for each', function () {
     $first = User::factory()->technician()->create();
-    $second = User::factory()->radiologist()->create();
+    $second = User::factory()->physician()->create();
 
     Livewire::actingAs($first)->test(UploadStudies::class)->set('files', [dicomUpload('slice.dcm')]);
     Livewire::actingAs($second)->test(UploadStudies::class)
@@ -118,13 +118,13 @@ test('at least one file is required', function () {
         ->assertHasErrors(['files' => 'Choose at least one DICOM file.']);
 });
 
-test('radiologists can import files', function () {
-    $radiologist = User::factory()->radiologist()->create();
+test('physicians can import files', function () {
+    $physician = User::factory()->physician()->create();
 
-    Livewire::actingAs($radiologist)
+    Livewire::actingAs($physician)
         ->test(UploadStudies::class)
         ->set('files', [dicomUpload('slice.dcm')])
         ->assertSee('Imported.');
 
-    expect(Study::sole()->uploaded_by)->toBe($radiologist->id);
+    expect(Study::sole()->uploaded_by)->toBe($physician->id);
 });

@@ -27,6 +27,16 @@
                             </x-nav-link>
                         @endcan
 
+                        @if (auth()->user()->isPhysician())
+                            <x-nav-link :href="route('shares.pending')" :active="request()->routeIs('shares.pending')">
+                                Requests
+                                @php($pendingShareCount = auth()->user()->receivedShares()->pending()->count())
+                                @if ($pendingShareCount > 0)
+                                    <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingShareCount }}</span>
+                                @endif
+                            </x-nav-link>
+                        @endif
+
                         @can('manage-users')
                             <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.index')">
                                 Users

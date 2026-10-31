@@ -2,6 +2,7 @@
 
 namespace App\Services\Dicom;
 
+use App\Enums\Role;
 use App\Models\DicomInstance;
 use App\Models\Series;
 use App\Models\Study;
@@ -17,17 +18,22 @@ class DicomImporter
 {
     public const DISK = DicomStorage::DISK;
 
-    public function __construct(private DicomParser $parser, private DicomStorage $storage) {}
+    public function __construct(private DicomParser $parser, private DicomStorage $storage, private StudyDeleter $deleter) {}
 
     /**
      * @throws InvalidDicomFileException
      * @throws DuplicateDicomInstanceException
+     * @throws StudyLimitReachedException
      */
     public function import(string $path, ?User $uploader = null): DicomInstance
     {
         $metadata = $this->parser->parse($path);
 
         $uploaderId = $uploader?->id;
+
+        if ($uploader?->role === Role::Patient) {
+            $this->ensurePatientCanUpload($uploader, $metadata->studyInstanceUid);
+        }
 
         if (DicomInstance::where('uploaded_by', $uploaderId)->where('sop_instance_uid', $metadata->sopInstanceUid)->exists()) {
             throw new DuplicateDicomInstanceException("Instance {$metadata->sopInstanceUid} has already been uploaded.");
@@ -54,6 +60,25 @@ class DicomImporter
         }
     }
 
+    /**
+     * Patients keep one study at a time: files of their current study are accepted, other studies only once it has
+     * expired. Expired studies still waiting for the scheduled clean-up are deleted now, so they do not block the upload.
+     *
+     * @throws StudyLimitReachedException
+     */
+    private function ensurePatientCanUpload(User $patient, string $studyInstanceUid): void
+    {
+        $patient->uploadedStudies()->expired()->get()->each(fn (Study $study) => $this->deleter->delete($study));
+
+        $current = $patient->uploadedStudies()->first();
+
+        if ($current !== null && $current->study_instance_uid !== $studyInstanceUid) {
+            throw new StudyLimitReachedException(
+                "This file belongs to another study. You can upload a new study after your current one expires on {$current->expires_at->toFormattedDateString()}.",
+            );
+        }
+    }
+
     private function persist(DicomMetadata $metadata, string $storedPath, int $fileSize, ?User $uploader): DicomInstance
     {
         $study = Study::firstOrCreate(
@@ -66,6 +91,7 @@ class DicomImporter
                 'study_date' => $metadata->studyDate,
                 'study_description' => $metadata->studyDescription,
                 'accession_number' => $metadata->accessionNumber,
+                'expires_at' => $uploader?->role === Role::Patient ? now()->addDays(Study::PATIENT_STUDY_LIFETIME_DAYS) : null,
             ],
         );
 

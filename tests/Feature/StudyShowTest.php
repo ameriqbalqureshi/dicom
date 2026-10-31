@@ -8,22 +8,39 @@ use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
-test('the study page lists its series and image URLs for the viewer', function () {
+test('single-frame images of a series are shown as one stack', function () {
     $series = Series::factory()->create(['modality' => 'MR', 'series_description' => 'T2 Axial']);
-    $instance = DicomInstance::factory()->for($series)->create(['number_of_frames' => 2]);
+    $first = DicomInstance::factory()->for($series)->create(['instance_number' => 1]);
+    $second = DicomInstance::factory()->for($series)->create(['instance_number' => 2]);
 
     $component = Livewire::actingAs($series->study->uploader)
         ->test(StudyShow::class, ['study' => $series->study])
         ->assertOk();
 
     expect($component->viewData('viewerSeries'))->toBe([[
-        'id' => $series->id,
+        'id' => "series-{$series->id}",
         'label' => 'MR T2 Axial',
+        'isRun' => false,
         'slices' => [
-            ['url' => route('instances.file', $instance), 'frame' => 0, 'instanceNumber' => $instance->instance_number],
-            ['url' => route('instances.file', $instance), 'frame' => 1, 'instanceNumber' => $instance->instance_number],
+            ['url' => route('instances.file', $first), 'frame' => 0, 'instanceNumber' => 1],
+            ['url' => route('instances.file', $second), 'frame' => 0, 'instanceNumber' => 2],
         ],
     ]]);
+});
+
+test('each multi-frame image in a series is shown as its own run', function () {
+    $series = Series::factory()->create(['modality' => 'XA', 'series_description' => 'CORONARY ANGIO']);
+    $second = DicomInstance::factory()->for($series)->create(['instance_number' => 2, 'number_of_frames' => 3]);
+    $first = DicomInstance::factory()->for($series)->create(['instance_number' => 1, 'number_of_frames' => 2]);
+
+    $entries = Livewire::actingAs($series->study->uploader)
+        ->test(StudyShow::class, ['study' => $series->study])
+        ->viewData('viewerSeries');
+
+    expect(array_column($entries, 'id'))->toBe(["instance-{$first->id}", "instance-{$second->id}"])
+        ->and(array_column($entries, 'label'))->toBe(['XA CORONARY ANGIO · Run 1', 'XA CORONARY ANGIO · Run 2'])
+        ->and(array_column($entries, 'isRun'))->toBe([true, true])
+        ->and(array_map(fn (array $entry): array => array_column($entry['slices'], 'frame'), $entries))->toBe([[0, 1], [0, 1, 2]]);
 });
 
 test('slices are ordered by instance number', function () {
