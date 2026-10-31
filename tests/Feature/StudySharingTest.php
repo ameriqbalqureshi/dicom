@@ -54,7 +54,7 @@ test('studies can only be shared with physicians', function (Role $role) {
     $study = Study::factory()->create();
 
     sharing()->share($study, $study->uploader, User::factory()->create(['role' => $role]));
-})->with([Role::Technician, Role::Patient, Role::Admin])->throws(InvalidArgumentException::class, 'only be shared with physicians');
+})->with([Role::Technician, Role::Patient, Role::Admin])->throws(InvalidArgumentException::class, 'only be shared with verified physicians');
 
 test('a study cannot be shared with its owner or someone who already has access', function () {
     $study = Study::factory()->create();

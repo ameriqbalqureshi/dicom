@@ -16,6 +16,16 @@
         <p class="rounded-md border border-emerald-800 bg-emerald-950 px-4 py-2 text-sm text-emerald-300">{{ $status }}</p>
     @endif
 
+    @error('reports')
+        <p class="rounded-md border border-red-800 bg-red-950 px-4 py-2 text-sm text-red-300">{{ $message }}</p>
+    @enderror
+
+    @if ($canWrite && ! $canSign)
+        <p class="rounded-md border border-amber-800 bg-amber-950/60 px-3 py-2 text-xs text-amber-200">
+            Your physician account is waiting for verification. You can write and save drafts, and sign them once an administrator has verified your registration.
+        </p>
+    @endif
+
     @if ($editing)
         <form wire:submit="saveDraft" class="flex flex-col gap-3 rounded-md border border-slate-700 p-4">
             <h3 class="text-sm font-medium">{{ $draftId ? 'Edit draft report' : 'New report' }}</h3>
@@ -47,9 +57,11 @@
 
             <div class="flex flex-wrap items-center gap-3">
                 <button type="submit" class="rounded-md border border-sky-600 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-950">Save draft</button>
-                <button type="button" wire:click="saveAndFinalize"
-                    wire:confirm="Finalize this report? It will be signed with your name and visible to everyone who can open this study. You will not be able to edit it, only add addenda."
-                    class="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">Finalize and sign</button>
+                @if ($canSign)
+                    <button type="button" wire:click="saveAndFinalize"
+                        wire:confirm="Finalize this report? It will be signed with your name and visible to everyone who can open this study. You will not be able to edit it, only add addenda."
+                        class="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">Finalize and sign</button>
+                @endif
                 <button type="button" wire:click="cancelDraft" class="text-sm text-slate-400 hover:text-white">Cancel</button>
             </div>
         </form>
@@ -88,9 +100,11 @@
                     @can('update', $report)
                         @unless ($draftId === $report->id)
                             <button type="button" wire:click="editDraft({{ $report->id }})" class="text-slate-300 hover:text-white">Edit</button>
-                            <button type="button" wire:click="finalize({{ $report->id }})"
-                                wire:confirm="Finalize this report? It will be signed with your name and visible to everyone who can open this study. You will not be able to edit it, only add addenda."
-                                class="text-emerald-400 hover:text-emerald-300">Finalize</button>
+                            @can('finalize', $report)
+                                <button type="button" wire:click="finalize({{ $report->id }})"
+                                    wire:confirm="Finalize this report? It will be signed with your name and visible to everyone who can open this study. You will not be able to edit it, only add addenda."
+                                    class="text-emerald-400 hover:text-emerald-300">Finalize</button>
+                            @endcan
                         @endunless
                         <button type="button" wire:click="discardDraft({{ $report->id }})" wire:confirm="Discard this draft report?"
                             class="text-red-400 hover:text-red-300">Discard</button>

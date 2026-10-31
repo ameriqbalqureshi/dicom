@@ -2,11 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\Quota;
 use App\Enums\Role;
 use App\Enums\ShareOutcome;
 use App\Models\Study;
 use App\Models\StudyShare;
 use App\Models\User;
+use App\Notifications\ShareAccepted;
+use App\Notifications\StudySharedWithYou;
+use App\Services\Billing\PackageLimits;
+use App\Services\Billing\QuotaExceededException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -17,33 +22,48 @@ use InvalidArgumentException;
  */
 class StudySharing
 {
+    public function __construct(private PackageLimits $limits) {}
+
     /**
-     * Share a study with a physician. Shares from patients wait for the physician to accept them.
+     * Share a study with a verified physician, counting it against the sharer's package. Shares from patients wait for
+     * the physician to accept them.
      *
      * @throws InvalidArgumentException
+     * @throws QuotaExceededException
      */
     public function share(Study $study, User $sharer, User $recipient): ShareOutcome
     {
-        if (! $recipient->isPhysician()) {
-            throw new InvalidArgumentException('Studies can only be shared with physicians.');
+        if (! $recipient->isVerifiedPhysician()) {
+            throw new InvalidArgumentException('Studies can only be shared with verified physicians.');
         }
 
         if ($study->uploaded_by === $recipient->id || $study->shares()->whereBelongsTo($recipient, 'recipient')->exists()) {
             throw new InvalidArgumentException("{$recipient->name} already has access to this study.");
         }
 
-        $share = $study->shares()->create([
-            'user_id' => $recipient->id,
-            'shared_by' => $sharer->id,
-            'accepted_at' => $sharer->role === Role::Patient ? null : now(),
-        ]);
+        $share = DB::transaction(function () use ($study, $sharer, $recipient): StudyShare {
+            $this->limits->spend($sharer, Quota::Shares);
+
+            return $study->shares()->create([
+                'user_id' => $recipient->id,
+                'shared_by' => $sharer->id,
+                'accepted_at' => $sharer->role === Role::Patient ? null : now(),
+            ]);
+        });
+
+        $recipient->notify(new StudySharedWithYou($study, $sharer, awaitingAcceptance: ! $share->isAccepted()));
 
         return $share->isAccepted() ? ShareOutcome::Shared : ShareOutcome::AwaitingAcceptance;
     }
 
+    /**
+     * Accept a share and let the person who sent it know.
+     */
     public function accept(StudyShare $share): void
     {
         $share->update(['accepted_at' => now()]);
+
+        $share->sharer?->notify(new ShareAccepted($share->study, $share->recipient));
     }
 
     /**

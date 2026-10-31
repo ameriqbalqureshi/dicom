@@ -38,6 +38,22 @@ class ReportPolicy
     }
 
     /**
+     * Determine whether the user can sign reports at all: only verified physicians.
+     */
+    public function sign(User $user): bool
+    {
+        return $user->isVerifiedPhysician();
+    }
+
+    /**
+     * Determine whether the user can finalize (sign) a draft: its author, once verified.
+     */
+    public function finalize(User $user, Report $report): bool
+    {
+        return $this->update($user, $report) && $this->sign($user);
+    }
+
+    /**
      * Determine whether the user can discard a draft report.
      */
     public function delete(User $user, Report $report): bool

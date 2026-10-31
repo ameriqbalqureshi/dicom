@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('model:prune')->daily();
 Schedule::command('studies:delete-expired')->hourly();
+Schedule::command('packages:send-expiry-reminders')->dailyAt('09:00');

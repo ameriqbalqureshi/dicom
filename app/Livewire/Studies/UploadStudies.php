@@ -4,6 +4,8 @@ namespace App\Livewire\Studies;
 
 use App\Enums\Role;
 use App\Models\Study;
+use App\Services\Billing\PackageLimits;
+use App\Services\Billing\QuotaExceededException;
 use App\Services\Dicom\DicomImporter;
 use App\Services\Dicom\DuplicateDicomInstanceException;
 use App\Services\Dicom\InvalidDicomFileException;
@@ -91,20 +93,23 @@ class UploadStudies extends Component
             return ['name' => $name, 'status' => 'imported', 'message' => 'Imported.', 'studyId' => $instance->series->study_id];
         } catch (DuplicateDicomInstanceException) {
             return ['name' => $name, 'status' => 'skipped', 'message' => 'Already uploaded.', 'studyId' => null];
-        } catch (InvalidDicomFileException|StudyLimitReachedException $exception) {
+        } catch (InvalidDicomFileException|StudyLimitReachedException|QuotaExceededException $exception) {
             return ['name' => $name, 'status' => 'failed', 'message' => $exception->getMessage(), 'studyId' => null];
         } finally {
             $file->delete();
         }
     }
 
-    public function render(): View
+    public function render(PackageLimits $limits): View
     {
         $user = auth()->user();
 
         return view('livewire.studies.upload-studies', [
             'isPatient' => $user->role === Role::Patient,
             'currentStudy' => $user->role === Role::Patient ? $user->uploadedStudies()->unexpired()->first() : null,
+            'subscription' => $user->isAdmin() ? null : $limits->current($user),
+            'hasPackage' => $user->isAdmin() || $limits->current($user) !== null,
+            'storageUsedMb' => round($limits->storageUsed($user) / 1024 / 1024, 1),
         ]);
     }
 }

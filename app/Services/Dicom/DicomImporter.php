@@ -2,11 +2,14 @@
 
 namespace App\Services\Dicom;
 
+use App\Enums\Quota;
 use App\Enums\Role;
 use App\Models\DicomInstance;
 use App\Models\Series;
 use App\Models\Study;
 use App\Models\User;
+use App\Services\Billing\PackageLimits;
+use App\Services\Billing\QuotaExceededException;
 use Illuminate\Http\File;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -18,12 +21,18 @@ class DicomImporter
 {
     public const DISK = DicomStorage::DISK;
 
-    public function __construct(private DicomParser $parser, private DicomStorage $storage, private StudyDeleter $deleter) {}
+    public function __construct(
+        private DicomParser $parser,
+        private DicomStorage $storage,
+        private StudyDeleter $deleter,
+        private PackageLimits $limits,
+    ) {}
 
     /**
      * @throws InvalidDicomFileException
      * @throws DuplicateDicomInstanceException
      * @throws StudyLimitReachedException
+     * @throws QuotaExceededException
      */
     public function import(string $path, ?User $uploader = null): DicomInstance
     {
@@ -39,12 +48,22 @@ class DicomImporter
             throw new DuplicateDicomInstanceException("Instance {$metadata->sopInstanceUid} has already been uploaded.");
         }
 
+        $existingStudy = Study::where('uploaded_by', $uploaderId)->where('study_instance_uid', $metadata->studyInstanceUid)->first(['id', 'study_date']);
+
+        if ($uploader !== null) {
+            $this->limits->ensureStorageFor($uploader, filesize($path));
+
+            if ($existingStudy === null) {
+                $this->limits->ensure($uploader, Quota::Uploads);
+            }
+        }
+
         $storedPath = $this->storage->pathFor(
             $uploaderId,
             $metadata->studyInstanceUid,
             $metadata->seriesInstanceUid,
             $metadata->sopInstanceUid,
-            Study::where('uploaded_by', $uploaderId)->where('study_instance_uid', $metadata->studyInstanceUid)->value('study_date') ?? $metadata->studyDate,
+            $existingStudy->study_date ?? $metadata->studyDate,
         );
 
         $this->storage->disk()->putFileAs(dirname($storedPath), new File($path), basename($storedPath));
@@ -94,6 +113,10 @@ class DicomImporter
                 'expires_at' => $uploader?->role === Role::Patient ? now()->addDays(Study::PATIENT_STUDY_LIFETIME_DAYS) : null,
             ],
         );
+
+        if ($uploader !== null && $study->wasRecentlyCreated) {
+            $this->limits->spend($uploader, Quota::Uploads);
+        }
 
         $series = Series::firstOrCreate(
             ['study_id' => $study->id, 'series_instance_uid' => $metadata->seriesInstanceUid],

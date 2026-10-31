@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\Role;
+use App\Notifications\Auth\ResetPasswordNotification;
+use App\Notifications\Auth\VerifyEmailNotification;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -58,7 +61,29 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => Role::class,
+            'physician_verified_at' => 'datetime',
         ];
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyEmailNotification);
+    }
+
+    /**
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     */
+    public function scopeAdmins(Builder $query): void
+    {
+        $query->where('role', Role::Admin);
     }
 
     public function isAdmin(): bool
@@ -69,6 +94,38 @@ class User extends Authenticatable
     public function isPhysician(): bool
     {
         return $this->role === Role::Physician;
+    }
+
+    /**
+     * Whether the user is a physician an administrator has verified. Physicians who signed up themselves can try the
+     * service, but cannot receive shared studies or sign reports until they are verified.
+     */
+    public function isVerifiedPhysician(): bool
+    {
+        return $this->isPhysician() && $this->physician_verified_at !== null;
+    }
+
+    public function markPhysicianVerified(): void
+    {
+        $this->forceFill(['physician_verified_at' => now()])->save();
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     */
+    public function scopeVerifiedPhysicians(Builder $query): void
+    {
+        $query->where('role', Role::Physician)->whereNotNull('physician_verified_at');
+    }
+
+    /**
+     * Package purchases, including the trial, pending purchases and past packages.
+     *
+     * @return HasMany<Subscription, $this>
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
     }
 
     /**

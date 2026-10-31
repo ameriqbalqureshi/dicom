@@ -47,6 +47,10 @@
                 </div>
             </div>
         @elseif ($canCreate)
+            @error('create')
+                <p class="rounded-md border border-red-800 bg-red-950 px-4 py-2 text-sm text-red-300">{{ $message }}</p>
+            @enderror
+
             <form wire:submit="create" class="flex flex-wrap items-center gap-4">
                 <label class="flex items-center gap-2 text-sm text-slate-300">
                     <input type="checkbox" wire:model="requirePin" class="rounded border-slate-600 bg-slate-950 accent-sky-500">

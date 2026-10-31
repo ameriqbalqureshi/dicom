@@ -4,6 +4,7 @@ namespace App\Livewire\Studies;
 
 use App\Models\GuestLink;
 use App\Models\Study;
+use App\Services\Billing\QuotaExceededException;
 use App\Services\GuestLinkIssuer;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
@@ -39,7 +40,13 @@ class GuestLinks extends Component
     {
         $this->authorize('createGuestLink', $this->study);
 
-        ['link' => $link, 'url' => $url, 'pin' => $pin] = $issuer->issue($this->study, auth()->user(), $this->requirePin);
+        try {
+            ['link' => $link, 'url' => $url, 'pin' => $pin] = $issuer->issue($this->study, auth()->user(), $this->requirePin);
+        } catch (QuotaExceededException $exception) {
+            $this->addError('create', $exception->getMessage());
+
+            return;
+        }
 
         $this->issued = ['url' => $url, 'pin' => $pin, 'expiresAt' => $link->expires_at->toDayDateTimeString()];
         $this->status = null;

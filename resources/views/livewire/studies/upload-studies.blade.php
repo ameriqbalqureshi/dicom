@@ -6,6 +6,19 @@
         </p>
     </div>
 
+    @if (! $hasPackage)
+        <p class="rounded-md border border-red-800 bg-red-950 px-4 py-3 text-sm text-red-300">
+            You do not have an active package. <a href="{{ route('package.show') }}" class="font-medium underline">Choose a package</a> to upload studies.
+        </p>
+    @elseif ($subscription)
+        <p class="text-sm text-slate-400">
+            {{ $subscription->package->name }}:
+            {{ $subscription->remaining(App\Enums\Quota::Uploads) === null ? 'unlimited' : $subscription->remaining(App\Enums\Quota::Uploads) }} new {{ Str::plural('study', $subscription->remaining(App\Enums\Quota::Uploads) ?? 2) }} left,
+            {{ $storageUsedMb }}{{ $subscription->max_storage_mb === null ? ' MB stored' : ' of '.number_format($subscription->max_storage_mb).' MB used' }}.
+            <a href="{{ route('package.show') }}" class="text-sky-400 hover:text-sky-300">Details</a>
+        </p>
+    @endif
+
     @if ($isPatient)
         <p class="rounded-md border border-amber-800 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
             @if ($currentStudy)

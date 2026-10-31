@@ -16,6 +16,7 @@
                     <th class="px-4 py-3">Name</th>
                     <th class="px-4 py-3">Email</th>
                     <th class="px-4 py-3">Role</th>
+                    <th class="px-4 py-3">Package</th>
                     <th class="px-4 py-3"></th>
                 </tr>
             </thead>
@@ -35,6 +36,43 @@
                                     @endforeach
                                 </select>
                             @endif
+
+                            @if ($user->isPhysician())
+                                <div class="mt-1 text-xs">
+                                    @if ($user->isVerifiedPhysician())
+                                        <span class="text-emerald-300">Verified</span>
+                                    @else
+                                        <span class="text-amber-300">Not verified</span>
+                                        @if ($user->registration_number)
+                                            <span class="text-slate-400">· reg. {{ $user->registration_number }}</span>
+                                        @endif
+                                        <button type="button" wire:click="verifyPhysician({{ $user->id }})"
+                                            wire:confirm="Verify {{ $user->name }} (registration {{ $user->registration_number ?? 'not given' }})? They will be able to receive shared studies and sign reports."
+                                            class="ml-1 text-sky-400 hover:text-sky-300">Verify</button>
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3">
+                            @unless ($user->isAdmin())
+                                @php($currentSubscription = $user->subscriptions->first())
+                                <div class="text-slate-300">
+                                    {{ $currentSubscription?->package->name ?? 'None' }}
+                                    @if ($currentSubscription?->ends_at)
+                                        <span class="text-xs text-slate-400">· until {{ $currentSubscription->ends_at->toFormattedDateString() }}</span>
+                                    @endif
+                                </div>
+                                @if ($packagesByRole->has($user->role->value))
+                                    <select wire:change="assignPackage({{ $user->id }}, $event.target.value)" aria-label="Assign a package to {{ $user->name }}"
+                                        wire:confirm="Start this package for {{ $user->name }} now, without payment? It replaces their current package."
+                                        class="mt-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-300">
+                                        <option value="">Assign package…</option>
+                                        @foreach ($packagesByRole->get($user->role->value) as $package)
+                                            <option value="{{ $package->id }}">{{ $package->name }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
+                            @endunless
                         </td>
                         <td class="px-4 py-3 text-right">
                             @unless ($user->is(auth()->user()))

@@ -42,10 +42,27 @@
                                 Users
                             </x-nav-link>
                         @endcan
+
+                        @can('manage-billing')
+                            <x-nav-link :href="route('packages.index')" :active="request()->routeIs('packages.index')">
+                                Packages
+                            </x-nav-link>
+                            <x-nav-link :href="route('payments.index')" :active="request()->routeIs('payments.index')">
+                                Payments
+                                @php($pendingPaymentCount = App\Models\Subscription::pending()->count())
+                                @if ($pendingPaymentCount > 0)
+                                    <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingPaymentCount }}</span>
+                                @endif
+                            </x-nav-link>
+                        @endcan
                     </div>
                 </div>
 
                 <div class="flex items-center gap-4 text-sm">
+                    @unless (auth()->user()->isAdmin())
+                        <a href="{{ route('package.show') }}" class="{{ request()->routeIs('package.show') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Package</a>
+                    @endunless
+
                     @if (auth()->user()->isPhysician())
                         <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.edit') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Profile</a>
                     @endif
@@ -62,6 +79,14 @@
                 </div>
             </div>
         </nav>
+
+        @if (auth()->user()->isPhysician() && ! auth()->user()->isVerifiedPhysician())
+            <div class="border-b border-amber-900 bg-amber-950/60">
+                <p class="mx-auto max-w-7xl px-4 py-2 text-sm text-amber-200">
+                    Your physician account is waiting for verification. Until then you can upload and view your own studies, but cannot receive shared studies or sign reports.
+                </p>
+            </div>
+        @endif
 
         <main class="mx-auto max-w-7xl px-4 py-6">
             {{ $slot }}

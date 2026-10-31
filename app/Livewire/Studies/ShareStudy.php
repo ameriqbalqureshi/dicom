@@ -2,10 +2,10 @@
 
 namespace App\Livewire\Studies;
 
-use App\Enums\Role;
 use App\Enums\ShareOutcome;
 use App\Models\Study;
 use App\Models\User;
+use App\Services\Billing\QuotaExceededException;
 use App\Services\StudySharing;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -43,7 +43,7 @@ class ShareStudy extends Component
 
         try {
             $outcome = $sharing->share($this->study, auth()->user(), $recipient);
-        } catch (InvalidArgumentException $exception) {
+        } catch (InvalidArgumentException|QuotaExceededException $exception) {
             $this->addError('search', $exception->getMessage());
 
             return;
@@ -85,7 +85,7 @@ class ShareStudy extends Component
     }
 
     /**
-     * Physicians other than the current user whose name or email contains the search term.
+     * Verified physicians other than the current user whose name or email contains the search term.
      *
      * @return Collection<int, User>
      */
@@ -101,7 +101,7 @@ class ShareStudy extends Component
 
         return User::query()
             ->whereKeyNot($user->id)
-            ->where('role', Role::Physician)
+            ->verifiedPhysicians()
             ->where(fn ($query) => $query->where('name', 'like', $like)->orWhere('email', 'like', $like))
             ->orderBy('name')
             ->limit(self::MAX_RESULTS)

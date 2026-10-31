@@ -2,9 +2,14 @@
 
 namespace App\Livewire\Studies;
 
+use App\Enums\Quota;
 use App\Models\Report;
 use App\Models\Study;
+use App\Notifications\ReportFinalized;
+use App\Services\Billing\PackageLimits;
+use App\Services\Billing\QuotaExceededException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 /**
@@ -81,21 +86,45 @@ class StudyReports extends Component
     /**
      * Save the form and finalize the report in one step.
      */
-    public function saveAndFinalize(): void
+    public function saveAndFinalize(PackageLimits $limits): void
     {
+        $this->authorize('sign', Report::class);
+
         $report = $this->saveValidatedDraft();
-        $report->finalize();
 
         $this->resetDraft();
-        $this->status = 'Report finalized. Everyone who can open this study can now read it.';
+        $this->signReport($report, $limits, 'Draft saved, but not finalized: ');
     }
 
-    public function finalize(int $reportId): void
+    public function finalize(int $reportId, PackageLimits $limits): void
     {
-        $report = $this->findReport($reportId);
-        $this->authorize('update', $report);
+        $this->signReport($this->findReport($reportId), $limits);
+    }
 
-        $report->finalize();
+    /**
+     * Finalize the report, counting it against the author's package.
+     */
+    private function signReport(Report $report, PackageLimits $limits, string $failurePrefix = ''): void
+    {
+        $this->authorize('finalize', $report);
+
+        try {
+            DB::transaction(function () use ($report, $limits): void {
+                $limits->spend(auth()->user(), Quota::Reports);
+                $report->finalize();
+            });
+        } catch (QuotaExceededException $exception) {
+            $this->status = null;
+            $this->addError('reports', $failurePrefix.$exception->getMessage());
+
+            return;
+        }
+
+        $owner = $this->study->uploader;
+
+        if ($owner !== null && $owner->isNot(auth()->user())) {
+            $owner->notify(new ReportFinalized($report));
+        }
 
         $this->status = 'Report finalized. Everyone who can open this study can now read it.';
     }
@@ -190,6 +219,7 @@ class StudyReports extends Component
         return view('livewire.studies.study-reports', [
             'reports' => $reports,
             'canWrite' => $user->can('create', [Report::class, $this->study]),
+            'canSign' => $user->can('sign', Report::class),
             'credentialsMissing' => $user->isPhysician() && blank($user->registration_number),
         ]);
     }

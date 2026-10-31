@@ -95,7 +95,7 @@ test('sharing with someone who is not a physician shows an error', function () {
         ->test(ShareStudy::class, ['study' => $study])
         ->call('share', User::factory()->technician()->create()->id)
         ->assertHasErrors('search')
-        ->assertSee('Studies can only be shared with physicians.');
+        ->assertSee('Studies can only be shared with verified physicians.');
 
     expect(StudyShare::count())->toBe(0);
 });
