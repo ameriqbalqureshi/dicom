@@ -70,6 +70,18 @@ class Study extends Model
     }
 
     /**
+     * Limit studies to those the user may view: their own uploads, or every study for administrators.
+     *
+     * @param  Builder<Study>  $query
+     */
+    public function scopeVisibleTo(Builder $query, User $user): void
+    {
+        if (! $user->isAdmin()) {
+            $query->whereBelongsTo($user, 'uploader');
+        }
+    }
+
+    /**
      * Filter studies by patient name, patient ID, accession number or description.
      *
      * @param  Builder<Study>  $query

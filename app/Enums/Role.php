@@ -16,9 +16,4 @@ enum Role: string
             self::Technician => 'Technician',
         };
     }
-
-    public function canUploadStudies(): bool
-    {
-        return in_array($this, [self::Admin, self::Technician], true);
-    }
 }

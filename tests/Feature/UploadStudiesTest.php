@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Role;
 use App\Livewire\Studies\UploadStudies;
 use App\Models\DicomInstance;
 use App\Models\Series;
@@ -19,18 +20,12 @@ function dicomUpload(string $name, ?DicomFileBuilder $builder = null): UploadedF
     return UploadedFile::fake()->createWithContent($name, ($builder ?? new DicomFileBuilder)->build());
 }
 
-test('radiologists cannot open the upload page', function () {
-    $this->actingAs(User::factory()->radiologist()->create())
-        ->get(route('studies.upload'))
-        ->assertForbidden();
-});
-
-test('technicians can open the upload page', function () {
-    $this->actingAs(User::factory()->technician()->create())
+test('every role can open the upload page', function (Role $role) {
+    $this->actingAs(User::factory()->create(['role' => $role]))
         ->get(route('studies.upload'))
         ->assertOk()
         ->assertSeeLivewire(UploadStudies::class);
-});
+})->with(Role::cases());
 
 test('uploading a DICOM file immediately creates its study, series and instance', function () {
     $technician = User::factory()->technician()->create();
@@ -64,7 +59,23 @@ test('uploading a DICOM file immediately creates its study, series and instance'
         ->rows->toBe(2)
         ->uploaded_by->toBe($technician->id);
 
+    expect($instance->file_path)->toBe("users/{$technician->id}/2024/03/15/1.2.826.0.1.3680043.2.1/1.2.826.0.1.3680043.2.1.1.1/1.2.826.0.1.3680043.2.1.1.dcm");
     Storage::disk('dicom')->assertExists($instance->file_path);
+});
+
+test('a study uploaded by two users becomes an independent copy for each', function () {
+    $first = User::factory()->technician()->create();
+    $second = User::factory()->radiologist()->create();
+
+    Livewire::actingAs($first)->test(UploadStudies::class)->set('files', [dicomUpload('slice.dcm')]);
+    Livewire::actingAs($second)->test(UploadStudies::class)
+        ->set('files', [dicomUpload('slice.dcm')])
+        ->assertSee('Imported.');
+
+    expect(Study::pluck('uploaded_by')->sort()->values()->all())->toBe([$first->id, $second->id])
+        ->and(Series::count())->toBe(2)
+        ->and(DicomInstance::count())->toBe(2)
+        ->and(Storage::disk('dicom')->allFiles())->toHaveCount(2);
 });
 
 test('instances of the same series are grouped together', function () {
@@ -107,8 +118,13 @@ test('at least one file is required', function () {
         ->assertHasErrors(['files' => 'Choose at least one DICOM file.']);
 });
 
-test('radiologists cannot import files through the component', function () {
-    Livewire::actingAs(User::factory()->radiologist()->create())
+test('radiologists can import files', function () {
+    $radiologist = User::factory()->radiologist()->create();
+
+    Livewire::actingAs($radiologist)
         ->test(UploadStudies::class)
-        ->assertForbidden();
+        ->set('files', [dicomUpload('slice.dcm')])
+        ->assertSee('Imported.');
+
+    expect(Study::sole()->uploaded_by)->toBe($radiologist->id);
 });

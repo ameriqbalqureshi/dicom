@@ -8,7 +8,7 @@ use App\Models\User;
 class StudyPolicy
 {
     /**
-     * Determine whether the user can browse the study list.
+     * Determine whether the user can browse the study list (which only lists studies they may view).
      */
     public function viewAny(User $user): bool
     {
@@ -20,7 +20,7 @@ class StudyPolicy
      */
     public function view(User $user, Study $study): bool
     {
-        return true;
+        return $this->ownsOrAdministers($user, $study);
     }
 
     /**
@@ -28,7 +28,7 @@ class StudyPolicy
      */
     public function create(User $user): bool
     {
-        return $user->role->canUploadStudies();
+        return true;
     }
 
     /**
@@ -36,6 +36,11 @@ class StudyPolicy
      */
     public function delete(User $user, Study $study): bool
     {
-        return $user->isAdmin();
+        return $this->ownsOrAdministers($user, $study);
+    }
+
+    private function ownsOrAdministers(User $user, Study $study): bool
+    {
+        return $user->isAdmin() || $study->uploader()->is($user);
     }
 }

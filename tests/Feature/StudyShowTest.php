@@ -12,7 +12,7 @@ test('the study page lists its series and image URLs for the viewer', function (
     $series = Series::factory()->create(['modality' => 'MR', 'series_description' => 'T2 Axial']);
     $instance = DicomInstance::factory()->for($series)->create(['number_of_frames' => 2]);
 
-    $component = Livewire::actingAs(User::factory()->create())
+    $component = Livewire::actingAs($series->study->uploader)
         ->test(StudyShow::class, ['study' => $series->study])
         ->assertOk();
 
@@ -31,7 +31,7 @@ test('slices are ordered by instance number', function () {
     DicomInstance::factory()->for($series)->create(['instance_number' => 2]);
     DicomInstance::factory()->for($series)->create(['instance_number' => 1]);
 
-    $component = Livewire::actingAs(User::factory()->create())->test(StudyShow::class, ['study' => $series->study]);
+    $component = Livewire::actingAs($series->study->uploader)->test(StudyShow::class, ['study' => $series->study]);
 
     expect(array_column($component->viewData('viewerSeries')[0]['slices'], 'instanceNumber'))->toBe([1, 2]);
 });
@@ -39,7 +39,7 @@ test('slices are ordered by instance number', function () {
 test('the study page renders the playback, navigation and full screen controls', function () {
     $instance = DicomInstance::factory()->create(['number_of_frames' => 3]);
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs($instance->series->study->uploader)
         ->get(route('studies.show', $instance->series->study))
         ->assertOk()
         ->assertSee('x-on:click="togglePlay()"', false)
@@ -71,13 +71,23 @@ test('administrators can delete a study with its files', function () {
     Storage::disk('dicom')->assertMissing('2024/03/a.dcm');
 });
 
-test('technicians cannot delete a study', function () {
+test('uploaders can delete their own study', function () {
+    $study = Study::factory()->for(User::factory()->technician(), 'uploader')->create();
+
+    Livewire::actingAs($study->uploader)
+        ->test(StudyShow::class, ['study' => $study])
+        ->assertSee('Delete study')
+        ->call('delete')
+        ->assertRedirect(route('studies.index'));
+
+    $this->assertModelMissing($study);
+});
+
+test('users cannot open a study uploaded by someone else', function () {
     $study = Study::factory()->create();
 
-    Livewire::actingAs(User::factory()->technician()->create())
-        ->test(StudyShow::class, ['study' => $study])
-        ->assertDontSee('Delete study')
-        ->call('delete')
+    $this->actingAs(User::factory()->technician()->create())
+        ->get(route('studies.show', $study))
         ->assertForbidden();
 
     $this->assertModelExists($study);

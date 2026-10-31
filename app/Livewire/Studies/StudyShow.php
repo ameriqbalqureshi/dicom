@@ -5,10 +5,9 @@ namespace App\Livewire\Studies;
 use App\Models\DicomInstance;
 use App\Models\Series;
 use App\Models\Study;
-use App\Services\Dicom\DicomImporter;
+use App\Services\Dicom\DicomStorage;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 
 class StudyShow extends Component
@@ -22,14 +21,14 @@ class StudyShow extends Component
         $this->study = $study;
     }
 
-    public function delete(): void
+    public function delete(DicomStorage $storage): void
     {
         $this->authorize('delete', $this->study);
 
         $paths = $this->study->instances()->pluck('file_path')->all();
 
         $this->study->delete();
-        Storage::disk(DicomImporter::DISK)->delete($paths);
+        $storage->delete($paths);
 
         session()->flash('status', 'Study deleted.');
 

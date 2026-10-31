@@ -8,8 +8,6 @@ use App\Models\Study;
 use App\Models\User;
 use Illuminate\Http\File;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -17,9 +15,9 @@ use Throwable;
  */
 class DicomImporter
 {
-    public const DISK = 'dicom';
+    public const DISK = DicomStorage::DISK;
 
-    public function __construct(private DicomParser $parser) {}
+    public function __construct(private DicomParser $parser, private DicomStorage $storage) {}
 
     /**
      * @throws InvalidDicomFileException
@@ -29,16 +27,28 @@ class DicomImporter
     {
         $metadata = $this->parser->parse($path);
 
-        if (DicomInstance::where('sop_instance_uid', $metadata->sopInstanceUid)->exists()) {
+        $uploaderId = $uploader?->id;
+
+        if (DicomInstance::where('uploaded_by', $uploaderId)->where('sop_instance_uid', $metadata->sopInstanceUid)->exists()) {
             throw new DuplicateDicomInstanceException("Instance {$metadata->sopInstanceUid} has already been uploaded.");
         }
 
-        $storedPath = Storage::disk(self::DISK)->putFileAs(now()->format('Y/m'), new File($path), Str::uuid().'.dcm');
+        $storedPath = $this->storage->pathFor(
+            $uploaderId,
+            $metadata->studyInstanceUid,
+            $metadata->seriesInstanceUid,
+            $metadata->sopInstanceUid,
+            Study::where('uploaded_by', $uploaderId)->where('study_instance_uid', $metadata->studyInstanceUid)->value('study_date') ?? $metadata->studyDate,
+        );
+
+        $this->storage->disk()->putFileAs(dirname($storedPath), new File($path), basename($storedPath));
 
         try {
             return DB::transaction(fn (): DicomInstance => $this->persist($metadata, $storedPath, filesize($path), $uploader));
         } catch (Throwable $exception) {
-            Storage::disk(self::DISK)->delete($storedPath);
+            if (! DicomInstance::where('file_path', $storedPath)->exists()) {
+                $this->storage->delete([$storedPath]);
+            }
 
             throw $exception;
         }
@@ -47,7 +57,7 @@ class DicomImporter
     private function persist(DicomMetadata $metadata, string $storedPath, int $fileSize, ?User $uploader): DicomInstance
     {
         $study = Study::firstOrCreate(
-            ['study_instance_uid' => $metadata->studyInstanceUid],
+            ['uploaded_by' => $uploader?->id, 'study_instance_uid' => $metadata->studyInstanceUid],
             [
                 'patient_name' => $metadata->patientName,
                 'patient_id' => $metadata->patientId,
@@ -56,14 +66,12 @@ class DicomImporter
                 'study_date' => $metadata->studyDate,
                 'study_description' => $metadata->studyDescription,
                 'accession_number' => $metadata->accessionNumber,
-                'uploaded_by' => $uploader?->id,
             ],
         );
 
         $series = Series::firstOrCreate(
-            ['series_instance_uid' => $metadata->seriesInstanceUid],
+            ['study_id' => $study->id, 'series_instance_uid' => $metadata->seriesInstanceUid],
             [
-                'study_id' => $study->id,
                 'modality' => $metadata->modality,
                 'series_number' => $metadata->seriesNumber,
                 'series_description' => $metadata->seriesDescription,

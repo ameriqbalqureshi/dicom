@@ -6,21 +6,44 @@ use App\Models\Study;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('authenticated users see the study list', function () {
-    $study = Study::factory()->create(['patient_name' => 'DOE JANE']);
+test('users see the studies they uploaded', function () {
+    $user = User::factory()->create();
+    $study = Study::factory()->for($user, 'uploader')->create(['patient_name' => 'DOE JANE']);
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs($user)
         ->get(route('studies.index'))
         ->assertOk()
         ->assertSee('DOE JANE')
         ->assertSee(route('studies.show', $study));
 });
 
-test('studies can be searched by patient name, patient ID or accession number', function (string $term) {
-    Study::factory()->create(['patient_name' => 'DOE JANE', 'patient_id' => 'PID001', 'accession_number' => 'ACC777']);
-    Study::factory()->create(['patient_name' => 'ROE RICHARD', 'patient_id' => 'PID002', 'accession_number' => 'ACC888']);
+test('users do not see studies uploaded by someone else', function () {
+    $user = User::factory()->technician()->create();
+    Study::factory()->create(['patient_name' => 'ROE RICHARD']);
+    Series::factory()->create(['modality' => 'MG']);
 
-    Livewire::actingAs(User::factory()->create())
+    Livewire::actingAs($user)
+        ->test(StudyIndex::class)
+        ->assertDontSee('ROE RICHARD')
+        ->assertViewHas('modalities', fn ($modalities) => $modalities->isEmpty());
+});
+
+test('administrators see every study', function () {
+    Study::factory()->create(['patient_name' => 'DOE JANE']);
+    Study::factory()->create(['patient_name' => 'ROE RICHARD']);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test(StudyIndex::class)
+        ->assertSee('DOE JANE')
+        ->assertSee('ROE RICHARD');
+});
+
+test('studies can be searched by patient name, patient ID or accession number', function (string $term) {
+    $user = User::factory()->create();
+    Study::factory()->for($user, 'uploader')->create(['patient_name' => 'DOE JANE', 'patient_id' => 'PID001', 'accession_number' => 'ACC777']);
+    Study::factory()->for($user, 'uploader')->create(['patient_name' => 'ROE RICHARD', 'patient_id' => 'PID002', 'accession_number' => 'ACC888']);
+
+    Livewire::actingAs($user)
         ->test(StudyIndex::class)
         ->set('search', $term)
         ->assertSee('DOE JANE')
@@ -28,10 +51,11 @@ test('studies can be searched by patient name, patient ID or accession number', 
 })->with(['patient name' => 'jane', 'patient ID' => 'PID001', 'accession number' => 'ACC777']);
 
 test('studies can be filtered by modality', function () {
-    Series::factory()->for(Study::factory()->state(['patient_name' => 'CT PATIENT']))->create(['modality' => 'CT']);
-    Series::factory()->for(Study::factory()->state(['patient_name' => 'MR PATIENT']))->create(['modality' => 'MR']);
+    $user = User::factory()->create();
+    Series::factory()->for(Study::factory()->for($user, 'uploader')->state(['patient_name' => 'CT PATIENT']))->create(['modality' => 'CT']);
+    Series::factory()->for(Study::factory()->for($user, 'uploader')->state(['patient_name' => 'MR PATIENT']))->create(['modality' => 'MR']);
 
-    Livewire::actingAs(User::factory()->create())
+    Livewire::actingAs($user)
         ->test(StudyIndex::class)
         ->set('modality', 'MR')
         ->assertSee('MR PATIENT')
@@ -39,9 +63,10 @@ test('studies can be filtered by modality', function () {
 });
 
 test('an empty list explains that nothing matches the filters', function () {
-    Study::factory()->create(['patient_name' => 'DOE JANE']);
+    $user = User::factory()->create();
+    Study::factory()->for($user, 'uploader')->create(['patient_name' => 'DOE JANE']);
 
-    Livewire::actingAs(User::factory()->create())
+    Livewire::actingAs($user)
         ->test(StudyIndex::class)
         ->set('search', 'nobody')
         ->assertSee('No studies match your filters.');

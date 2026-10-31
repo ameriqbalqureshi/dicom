@@ -38,7 +38,10 @@ class StudyIndex extends Component
 
     public function render(): View
     {
+        $user = auth()->user();
+
         $studies = Study::query()
+            ->visibleTo($user)
             ->search($this->search)
             ->when($this->modality !== '', fn ($query) => $query->whereHas(
                 'series',
@@ -52,7 +55,9 @@ class StudyIndex extends Component
 
         return view('livewire.studies.study-index', [
             'studies' => $studies,
-            'modalities' => Series::query()->whereNotNull('modality')->distinct()->orderBy('modality')->pluck('modality'),
+            'modalities' => Series::query()
+                ->whereHas('study', fn ($query) => $query->visibleTo($user))
+                ->whereNotNull('modality')->distinct()->orderBy('modality')->pluck('modality'),
         ]);
     }
 }
