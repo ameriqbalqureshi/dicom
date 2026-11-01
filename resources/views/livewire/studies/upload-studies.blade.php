@@ -30,30 +30,69 @@
         </p>
     @endif
 
-    <div x-data="{ uploading: false, progress: 0, failed: false }"
-        x-on:livewire-upload-start="uploading = true; failed = false; progress = 0"
-        x-on:livewire-upload-progress="progress = $event.detail.progress"
-        x-on:livewire-upload-finish="uploading = false"
-        x-on:livewire-upload-error="uploading = false; failed = true"
+    {{-- Files are sent one request at a time so a large study never exceeds the server's per-request size or file-count limits. --}}
+    <div x-data="{
+            maxFiles: {{ App\Livewire\Studies\UploadStudies::MAX_FILES }},
+            uploading: false,
+            progress: 0,
+            current: 0,
+            total: 0,
+            tooMany: false,
+            failedFiles: [],
+            async uploadFiles(input) {
+                const files = Array.from(input.files);
+                input.value = '';
+
+                this.tooMany = files.length > this.maxFiles;
+                if (files.length === 0 || this.tooMany) {
+                    return;
+                }
+
+                this.failedFiles = [];
+                await this.$wire.clearResults();
+                this.uploading = true;
+                this.total = files.length;
+
+                for (const [index, file] of files.entries()) {
+                    this.current = index + 1;
+                    await new Promise((resolve) => this.$wire.upload(
+                        'files',
+                        file,
+                        resolve,
+                        () => { this.failedFiles.push(file.name); resolve(); },
+                        (event) => { this.progress = Math.round((index + event.detail.progress / 100) / files.length * 100); },
+                        resolve,
+                    ));
+                }
+
+                this.uploading = false;
+            },
+        }"
         class="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-700 px-6 py-10 text-center hover:border-sky-600">
+        <label class="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-700 px-6 py-10 text-center"
+            :class="uploading ? 'cursor-wait opacity-60' : 'cursor-pointer hover:border-sky-600'">
             <span class="text-sm text-slate-300">Click to choose files</span>
             <span class="text-xs text-slate-500">Up to {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} files, 100 MB each</span>
-            <input wire:model="files" type="file" multiple class="sr-only">
+            <input x-on:change="uploadFiles($event.target)" :disabled="uploading" type="file" multiple class="sr-only">
         </label>
 
         <div x-show="uploading" x-cloak class="flex flex-col gap-1.5">
-            <div class="text-sm text-slate-300">Uploading… <span x-text="progress + '%'"></span></div>
+            <div class="text-sm text-slate-300">
+                Uploading and importing file <span x-text="current"></span> of <span x-text="total"></span>… <span x-text="progress + '%'"></span>
+            </div>
             <div class="h-2 overflow-hidden rounded bg-slate-800">
                 <div class="h-full bg-sky-500 transition-all" :style="`width: ${progress}%`"></div>
             </div>
         </div>
 
-        <div wire:loading wire:target="files" class="text-sm text-slate-300">Importing…</div>
-
-        <p x-show="failed" x-cloak class="text-sm text-red-400">
-            The upload failed. Check that the files are not larger than the server allows and try again.
+        <p x-show="tooMany" x-cloak class="text-sm text-red-400">
+            Upload at most {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} files at a time.
         </p>
+
+        <div x-show="failedFiles.length > 0" x-cloak class="text-sm text-red-400">
+            <p>These files could not be uploaded. Check that each is 100 MB or smaller and try them again:</p>
+            <p class="mt-1 text-red-300" x-text="failedFiles.join(', ')"></p>
+        </div>
 
         @error('files') <p class="text-sm text-red-400">{{ $message }}</p> @enderror
         @foreach (collect($errors->get('files.*'))->flatten()->unique() as $fileError)

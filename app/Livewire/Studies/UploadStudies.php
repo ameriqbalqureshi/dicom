@@ -71,13 +71,22 @@ class UploadStudies extends Component
         $this->validate();
 
         $importer = app(DicomImporter::class);
-        $this->results = [];
 
         foreach ($this->files as $file) {
             $this->results[] = $this->importFile($importer, $file);
         }
 
         $this->reset('files');
+    }
+
+    /**
+     * Start a new selection. The browser uploads its files one request at a
+     * time, so results accumulate across requests until this is called.
+     */
+    public function clearResults(): void
+    {
+        $this->reset('results');
+        $this->resetErrorBag();
     }
 
     /**

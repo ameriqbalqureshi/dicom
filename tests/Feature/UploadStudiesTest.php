@@ -101,6 +101,20 @@ test('an instance that was already uploaded is skipped', function () {
     expect(Storage::disk('dicom')->allFiles())->toHaveCount(1);
 });
 
+test('results of files uploaded one request at a time accumulate until cleared', function () {
+    $component = Livewire::actingAs(User::factory()->technician()->create())->test(UploadStudies::class);
+
+    $component->set('files', [dicomUpload('one.dcm')]);
+    $component->set('files', [dicomUpload('two.dcm', (new DicomFileBuilder)->with(0x0008, 0x0018, 'UI', '1.2.826.0.1.3680043.2.1.2'))])
+        ->assertSee('one.dcm')
+        ->assertSee('two.dcm');
+
+    expect($component->get('results'))->toHaveCount(2)
+        ->and(DicomInstance::count())->toBe(2);
+
+    $component->call('clearResults')->assertSet('results', []);
+});
+
 test('a file that is not DICOM is reported and not stored', function () {
     Livewire::actingAs(User::factory()->technician()->create())
         ->test(UploadStudies::class)

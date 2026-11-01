@@ -48,7 +48,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * The disk physicians' signature images are kept on. It is private: signatures are only embedded in report PDFs.
      */
-    public const SIGNATURE_DISK = 'local';
+    public const SIGNATURE_DISK = 'signatures';
 
     /**
      * Get the attributes that should be cast.
