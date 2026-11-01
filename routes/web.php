@@ -4,6 +4,7 @@ use App\Http\Controllers\DicomInstanceFileController;
 use App\Http\Controllers\GuestInstanceFileController;
 use App\Http\Controllers\GuestReportPdfController;
 use App\Http\Controllers\LogoutController;
+use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportPdfController;
 use App\Http\Controllers\VerifyEmailController;
 use App\Livewire\Auth\ForgotPassword;
@@ -21,9 +22,17 @@ use App\Livewire\Studies\StudyIndex;
 use App\Livewire\Studies\StudyShow;
 use App\Livewire\Studies\UploadStudies;
 use App\Livewire\Users\UserIndex;
+use App\Livewire\Users\UserShow;
 use App\Models\Study;
 use App\Services\GuestLinkIssuer;
 use Illuminate\Support\Facades\Route;
+
+Route::view('/', 'site.home')->name('home');
+Route::get('/pricing', PricingController::class)->name('pricing');
+Route::view('/about', 'site.about')->name('about');
+Route::view('/contact', 'site.contact')->name('contact');
+Route::view('/privacy', 'site.privacy')->name('privacy');
+Route::view('/terms', 'site.terms')->name('terms');
 
 Route::livewire('/guest/{token}', GuestStudy::class)
     ->where('token', '[A-Za-z0-9]{'.GuestLinkIssuer::TOKEN_LENGTH.'}')
@@ -54,8 +63,6 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/', fn () => redirect()->route('studies.index'))->name('home');
-
     Route::livewire('/studies', StudyIndex::class)->name('studies.index');
     Route::livewire('/studies/upload', UploadStudies::class)
         ->middleware('can:create,'.Study::class)
@@ -82,4 +89,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('/users', UserIndex::class)
         ->middleware('can:manage-users')
         ->name('users.index');
+    Route::livewire('/users/{user}', UserShow::class)
+        ->middleware('can:manage-users')
+        ->name('users.show');
 });

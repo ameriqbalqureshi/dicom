@@ -115,6 +115,8 @@
 
 {{ $paymentInstructions }}</p>
 
+                @include('billing.partials.payment-accounts')
+
                 <label class="flex flex-col gap-1 text-sm">
                     <span class="text-slate-300">Paid by</span>
                     <select wire:model="paymentMethod" class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2">

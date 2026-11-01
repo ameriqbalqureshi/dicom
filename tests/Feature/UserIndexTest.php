@@ -2,11 +2,14 @@
 
 use App\Enums\Role;
 use App\Livewire\Users\UserIndex;
+use App\Models\DicomInstance;
+use App\Models\Series;
 use App\Models\Study;
 use App\Models\StudyShare;
 use App\Models\User;
 use App\Services\StudySharing;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('non-administrators cannot open user management', function () {
@@ -151,4 +154,80 @@ test('deleting a user removes every share they made or received', function () {
         ->call('deleteUser', $physician->id);
 
     expect(StudyShare::count())->toBe(0);
+});
+
+test('deleting a user also deletes the studies they uploaded and their files, but not other people\'s', function () {
+    Storage::fake('dicom');
+    Storage::disk('dicom')->put('a.dcm', 'dicom');
+    $technician = User::factory()->technician()->create();
+    $instance = DicomInstance::factory()
+        ->for(Series::factory()->for(Study::factory()->for($technician, 'uploader')))
+        ->create(['file_path' => 'a.dcm', 'uploaded_by' => $technician->id]);
+    $study = $instance->series->study;
+    $otherStudy = Study::factory()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test(UserIndex::class)
+        ->call('deleteUser', $technician->id)
+        ->assertSet('status', "{$technician->name} was deleted, with their study.");
+
+    $this->assertModelMissing($technician);
+    $this->assertModelMissing($study);
+    $this->assertModelMissing($instance);
+    $this->assertModelExists($otherStudy);
+    Storage::disk('dicom')->assertMissing('a.dcm');
+});
+
+test('administrators can verify an email address for someone who cannot', function () {
+    $user = User::factory()->unverified()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test(UserIndex::class)
+        ->call('verifyEmail', $user->id)
+        ->assertHasNoErrors();
+
+    expect($user->refresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+test('administrators can find users by name or email, role and status', function () {
+    $grey = User::factory()->physician()->create(['name' => 'Dr Grey', 'email' => 'grey@clinic.test']);
+    $unverifiedPhysician = User::factory()->unverifiedPhysician()->create(['name' => 'Dr New']);
+    $unconfirmed = User::factory()->patient()->unverified()->create(['name' => 'Pending Patient']);
+    $technician = User::factory()->technician()->create(['name' => 'Lab Tech', 'email' => 'tech@lab.test']);
+
+    $component = Livewire::actingAs(User::factory()->admin()->create(['name' => 'Admin']))->test(UserIndex::class);
+
+    $component->set('search', 'grey@clinic')->assertSee($grey->name)->assertDontSee($technician->name);
+    $component->set('search', '')->set('roleFilter', Role::Technician->value)->assertSee($technician->name)->assertDontSee($grey->name);
+    $component->set('roleFilter', '')->set('show', 'physician-unverified')->assertSee($unverifiedPhysician->name)->assertDontSee($grey->name);
+    $component->set('show', 'email-unverified')->assertSee($unconfirmed->name)->assertDontSee($grey->name);
+});
+
+test('the inactive filter lists users not seen for the chosen period, including old accounts never seen', function () {
+    $recent = User::factory()->create(['name' => 'Recent User', 'last_seen_at' => now()->subDays(10)]);
+    $away = User::factory()->create(['name' => 'Away User', 'last_seen_at' => now()->subDays(100)]);
+    $neverSeen = User::factory()->create(['name' => 'Never Seen', 'last_seen_at' => null, 'created_at' => now()->subDays(200)]);
+    $newcomer = User::factory()->create(['name' => 'New Comer', 'last_seen_at' => null, 'created_at' => now()->subDay()]);
+
+    Livewire::actingAs(User::factory()->admin()->create(['last_seen_at' => now()]))
+        ->test(UserIndex::class)
+        ->set('show', 'inactive')
+        ->set('inactiveDays', 90)
+        ->assertSee([$away->name, $neverSeen->name])
+        ->assertDontSee($recent->name)
+        ->assertDontSee($newcomer->name)
+        ->set('inactiveDays', 180)
+        ->assertSee($neverSeen->name)
+        ->assertDontSee($away->name);
+});
+
+test('administrators can export the listed users as CSV', function () {
+    User::factory()->create(['name' => 'Away User', 'email' => 'away@clinic.test', 'last_seen_at' => now()->subDays(100)]);
+    User::factory()->create(['name' => 'Recent User', 'last_seen_at' => now()]);
+
+    Livewire::actingAs(User::factory()->admin()->create(['last_seen_at' => now()]))
+        ->test(UserIndex::class)
+        ->set('show', 'inactive')
+        ->call('export')
+        ->assertFileDownloaded('users-'.now()->format('Y-m-d').'.csv');
 });

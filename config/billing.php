@@ -32,6 +32,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Payment accounts
+    |--------------------------------------------------------------------------
+    |
+    | The accounts buyers pay into, for each payment method above, shown at
+    | checkout and on the pricing page. Empty details are not shown, and a
+    | method without any details shows only the payment instructions.
+    |
+    */
+
+    'payment_accounts' => [
+        'bank_transfer' => [
+            'Bank' => env('BILLING_BANK_NAME'),
+            'Account title' => env('BILLING_BANK_ACCOUNT_TITLE'),
+            'Account number' => env('BILLING_BANK_ACCOUNT_NUMBER'),
+            'IBAN' => env('BILLING_BANK_IBAN'),
+            'Branch' => env('BILLING_BANK_BRANCH'),
+        ],
+        'jazzcash' => [
+            'Account title' => env('BILLING_JAZZCASH_ACCOUNT_TITLE'),
+            'Mobile number' => env('BILLING_JAZZCASH_NUMBER'),
+        ],
+        'easypaisa' => [
+            'Account title' => env('BILLING_EASYPAISA_ACCOUNT_TITLE'),
+            'Mobile number' => env('BILLING_EASYPAISA_NUMBER'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Payment instructions
     |--------------------------------------------------------------------------
     |

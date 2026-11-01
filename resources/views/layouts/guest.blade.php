@@ -10,7 +10,12 @@
     </head>
     <body class="flex min-h-full items-center justify-center px-4 text-slate-100 antialiased">
         <div class="w-full max-w-sm">
-            <h1 class="mb-6 text-center text-xl font-semibold tracking-tight text-white">{{ config('app.name') }}</h1>
+            <h1 class="mb-6 text-center text-xl font-semibold tracking-tight text-white">
+                <a href="{{ route('home') }}" class="inline-flex items-center gap-2 hover:text-sky-300">
+                    <x-site.logo class="size-7" />
+                    {{ config('app.name') }}
+                </a>
+            </h1>
 
             {{ $slot }}
         </div>

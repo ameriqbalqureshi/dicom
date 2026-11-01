@@ -62,6 +62,8 @@
             @if ($role === App\Enums\Role::Physician->value)
                 We verify physicians' registration before they can receive shared studies or sign reports.
             @endif
+            By creating an account you agree to our <a href="{{ route('terms') }}" class="text-sky-400 hover:text-sky-300" target="_blank">terms</a>
+            and <a href="{{ route('privacy') }}" class="text-sky-400 hover:text-sky-300" target="_blank">privacy policy</a>.
         </p>
 
         <button type="submit" class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-60">

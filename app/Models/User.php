@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Role;
 use App\Notifications\Auth\ResetPasswordNotification;
 use App\Notifications\Auth\VerifyEmailNotification;
+use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
@@ -62,6 +63,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'role' => Role::class,
             'physician_verified_at' => 'datetime',
+            'last_seen_at' => 'datetime',
         ];
     }
 
@@ -84,6 +86,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function scopeAdmins(Builder $query): void
     {
         $query->where('role', Role::Admin);
+    }
+
+    /**
+     * Users who have not used the service since the given time: those last seen before it, and those never seen whose
+     * account is older than it.
+     *
+     * @param  Builder<User>  $query
+     */
+    public function scopeInactiveSince(Builder $query, CarbonInterface $since): void
+    {
+        $query->where(function (Builder $query) use ($since) {
+            $query->where('last_seen_at', '<', $since)
+                ->orWhere(fn (Builder $query) => $query->whereNull('last_seen_at')->where('created_at', '<', $since));
+        });
     }
 
     public function isAdmin(): bool

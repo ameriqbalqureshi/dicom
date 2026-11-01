@@ -3,22 +3,47 @@
 namespace App\Livewire\Users;
 
 use App\Enums\Role;
+use App\Livewire\Users\Concerns\ManagesUsers;
 use App\Models\Package;
 use App\Models\User;
 use App\Notifications\AccountCreated;
-use App\Notifications\PhysicianVerified;
 use App\Services\Billing\SubscriptionManager;
-use App\Services\StudySharing;
+use App\Services\UserDeleter;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Title('Users')]
 class UserIndex extends Component
 {
+    use ManagesUsers, WithPagination;
+
+    /**
+     * The choices for how long someone must have been away to count as inactive, in days.
+     */
+    public const INACTIVITY_PERIODS = [30, 60, 90, 180, 365];
+
+    #[Url(as: 'q', except: '')]
+    public string $search = '';
+
+    #[Url(except: '')]
+    public string $roleFilter = '';
+
+    /**
+     * Narrows the list to users needing attention: "email-unverified", "physician-unverified" or "inactive".
+     */
+    #[Url(except: '')]
+    public string $show = '';
+
+    #[Url(except: 90)]
+    public int $inactiveDays = 90;
+
     public string $name = '';
 
     public string $email = '';
@@ -27,11 +52,18 @@ class UserIndex extends Component
 
     public string $role = Role::Physician->value;
 
-    public ?string $status = null;
-
     public function mount(): void
     {
         $this->authorize('manage-users');
+
+        $this->status = session('status');
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['search', 'roleFilter', 'show', 'inactiveDays'], true)) {
+            $this->resetPage();
+        }
     }
 
     /**
@@ -72,95 +104,74 @@ class UserIndex extends Component
         $this->status = 'User created.';
     }
 
-    /**
-     * Change a user's role. Only physicians can receive shared studies, so anyone who stops being one loses them.
-     */
-    public function updateRole(int $userId, string $role, StudySharing $sharing): void
+    public function deleteUser(int $userId, UserDeleter $deleter): void
     {
-        $this->authorize('manage-users');
-
-        Validator::make(['role' => $role], ['role' => ['required', Rule::enum(Role::class)]])->validate();
-
-        $user = User::findOrFail($userId);
-
-        if ($user->is(auth()->user())) {
-            $this->addError('users', 'You cannot change your own role.');
-
-            return;
-        }
-
-        $user->update(['role' => $role]);
-
-        if (! $user->isPhysician()) {
-            $sharing->revokeReceivedBy($user);
-        } elseif ($user->physician_verified_at === null) {
-            $user->markPhysicianVerified();
-        }
-        $this->status = "{$user->name} is now a ".Role::from($role)->label().'.';
-    }
-
-    public function verifyPhysician(int $userId): void
-    {
-        $this->authorize('manage-users');
-
-        $user = User::findOrFail($userId);
-
-        if (! $user->isPhysician()) {
-            $this->addError('users', "{$user->name} is not a physician.");
-
-            return;
-        }
-
-        $user->markPhysicianVerified();
-        $user->notify(new PhysicianVerified);
-        $this->status = "{$user->name} is verified. They can now receive shared studies and sign reports.";
+        $this->removeUser($userId, $deleter);
     }
 
     /**
-     * Start a package for a user without payment, replacing their current one.
+     * Download the users currently listed as a CSV file, e.g. to contact inactive users.
      */
-    public function assignPackage(int $userId, string $packageId, SubscriptionManager $subscriptions): void
-    {
-        $this->authorize('manage-billing');
-
-        if ($packageId === '') {
-            return;
-        }
-
-        $user = User::findOrFail($userId);
-        $package = Package::query()->where('role', $user->role)->findOrFail((int) $packageId);
-
-        $subscriptions->assign($user, $package, auth()->user());
-        $this->status = "{$user->name} now has the {$package->name} package.";
-    }
-
-    public function deleteUser(int $userId, StudySharing $sharing): void
+    public function export(): StreamedResponse
     {
         $this->authorize('manage-users');
 
-        $user = User::findOrFail($userId);
+        $users = $this->filteredUsers()->withCount('uploadedStudies')->orderBy('name')->lazy();
 
-        if ($user->is(auth()->user())) {
-            $this->addError('users', 'You cannot delete your own account.');
+        return response()->streamDownload(function () use ($users): void {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['Name', 'Email', 'Role', 'Email verified', 'Signed up', 'Last active', 'Studies uploaded']);
 
-            return;
-        }
+            foreach ($users as $user) {
+                fputcsv($output, [
+                    $user->name,
+                    $user->email,
+                    $user->role->label(),
+                    $user->hasVerifiedEmail() ? 'Yes' : 'No',
+                    $user->created_at?->toDateString(),
+                    $user->last_seen_at?->toDateTimeString() ?? 'Not recorded',
+                    $user->uploaded_studies_count,
+                ]);
+            }
 
-        $sharing->revokeInvolving($user);
-        $user->delete();
-        $this->status = "{$user->name} was deleted.";
+            fclose($output);
+        }, 'users-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * @return Builder<User>
+     */
+    private function filteredUsers(): Builder
+    {
+        $inactiveDays = in_array($this->inactiveDays, self::INACTIVITY_PERIODS, true) ? $this->inactiveDays : 90;
+
+        return User::query()
+            ->when(trim($this->search) !== '', function (Builder $query) {
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($this->search)).'%';
+                $query->where(fn (Builder $query) => $query->where('name', 'like', $like)->orWhere('email', 'like', $like));
+            })
+            ->when(Role::tryFrom($this->roleFilter), fn (Builder $query, Role $role) => $query->where('role', $role))
+            ->when($this->show === 'email-unverified', fn (Builder $query) => $query->whereNull('email_verified_at'))
+            ->when($this->show === 'physician-unverified', fn (Builder $query) => $query->where('role', Role::Physician)->whereNull('physician_verified_at'))
+            ->when($this->show === 'inactive', fn (Builder $query) => $query->inactiveSince(now()->subDays($inactiveDays)));
     }
 
     public function render(): View
     {
         return view('livewire.users.user-index', [
-            'users' => User::query()
+            'users' => $this->filteredUsers()
                 ->with(['subscriptions' => fn ($query) => $query->current()->with('package')->latest('starts_at')])
+                ->withCount('uploadedStudies')
                 ->orderByRaw('role = ? and physician_verified_at is null desc', [Role::Physician->value])
                 ->orderBy('name')
-                ->get(),
+                ->paginate(25),
             'packagesByRole' => Package::query()->orderByDesc('is_trial')->orderBy('price')->get()->groupBy(fn (Package $package) => $package->role->value),
             'roles' => Role::cases(),
+            'inactivityPeriods' => self::INACTIVITY_PERIODS,
+            'counts' => [
+                'email-unverified' => User::query()->whereNull('email_verified_at')->count(),
+                'physician-unverified' => User::query()->where('role', Role::Physician)->whereNull('physician_verified_at')->count(),
+            ],
         ]);
     }
 }
