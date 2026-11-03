@@ -177,6 +177,14 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * How many requests wait for this physician: studies patients want to share, and given-up studies they can keep.
+     */
+    public function openRequestCount(): int
+    {
+        return $this->receivedShares()->pending()->count() + Study::query()->sharedWith($this)->awaitingHandover()->count();
+    }
+
+    /**
      * Shares this user has made, of their own studies or forwarded ones.
      *
      * @return HasMany<StudyShare, $this>

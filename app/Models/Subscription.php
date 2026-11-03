@@ -12,7 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * A user's purchase of a package. While pending it records the payment for an administrator to confirm; once active it
- * holds a copy of the package's limits (so later changes to the package do not affect it) and what has been used.
+ * holds a copy of the package's limits (so later changes to the package do not affect it) and what has been used during
+ * it. The studies a user keeps are counted from their studies instead, so they carry over from one package to the next.
  */
 class Subscription extends Model
 {
@@ -52,7 +53,6 @@ class Subscription extends Model
             'max_reports' => 'integer',
             'max_shares' => 'integer',
             'max_guest_links' => 'integer',
-            'uploads_used' => 'integer',
             'reports_used' => 'integer',
             'shares_used' => 'integer',
             'guest_links_used' => 'integer',
@@ -94,8 +94,15 @@ class Subscription extends Model
         return $this->{$quota->limitColumn()};
     }
 
+    /**
+     * How much of the quota is used: the studies the user keeps now, or what was done during this subscription.
+     */
     public function used(Quota $quota): int
     {
+        if ($quota->countsStudiesKept()) {
+            return $this->user->uploadedStudies()->count();
+        }
+
         return $this->{$quota->usageColumn()};
     }
 

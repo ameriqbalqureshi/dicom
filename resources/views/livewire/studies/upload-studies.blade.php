@@ -2,7 +2,8 @@
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">Upload DICOM</h1>
         <p class="mt-1 text-sm text-slate-400">
-            Select one or more DICOM Part 10 files (.dcm). They are imported as soon as the upload finishes and grouped into studies and series automatically.
+            Choose DICOM files, or a whole folder such as the DICOM folder on a patient CD. Files are recognised by their content, so names without .dcm are fine, and anything else in the folder is skipped.
+            They are imported as soon as the upload finishes and grouped into studies and series automatically.
         </p>
     </div>
 
@@ -26,25 +27,98 @@
                 is available until {{ $currentStudy->expires_at->toDayDateTimeString() }}. You can add missing images to it; a new study can be uploaded once it expires.
             @else
                 You can upload one study. It stays available for {{ App\Models\Study::PATIENT_STUDY_LIFETIME_DAYS }} days and is then deleted automatically.
+                Physicians you have shared it with may choose to keep their own copy.
             @endif
         </p>
     @endif
 
-    {{-- Files are sent one request at a time so a large study never exceeds the server's per-request size or file-count limits. --}}
+    {{--
+        With S3 storage, files go straight from the browser to S3 (a few at a time) and the server only imports them.
+        Otherwise they are sent to the server one request at a time, so a large study never exceeds its per-request limits.
+    --}}
     <div x-data="{
             maxFiles: {{ App\Livewire\Studies\UploadStudies::MAX_FILES }},
+            directUploads: @js($directUploads),
+            parallelUploads: 3,
             uploading: false,
             progress: 0,
             current: 0,
             total: 0,
             tooMany: false,
+            scanning: false,
+            dragging: false,
+            skipped: 0,
+            noDicomFound: false,
             failedFiles: [],
-            async uploadFiles(input) {
+            async chooseFiles(input) {
                 const files = Array.from(input.files);
                 input.value = '';
+                await this.uploadFiles(files);
+            },
+            async dropFiles(event) {
+                this.dragging = false;
+                if (this.uploading || this.scanning) {
+                    return;
+                }
 
+                const entries = Array.from(event.dataTransfer.items)
+                    .map((item) => item.webkitGetAsEntry?.())
+                    .filter(Boolean);
+
+                if (entries.length === 0) {
+                    return this.uploadFiles(Array.from(event.dataTransfer.files));
+                }
+
+                this.scanning = true;
+                const files = (await Promise.all(entries.map((entry) => this.filesIn(entry)))).flat();
+                this.scanning = false;
+                await this.uploadFiles(files);
+            },
+            async filesIn(entry) {
+                if (entry.isFile) {
+                    return [await new Promise((resolve, reject) => entry.file(resolve, reject))];
+                }
+
+                const reader = entry.createReader();
+                const children = [];
+                let batch;
+                do {
+                    batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+                    children.push(...batch);
+                } while (batch.length > 0);
+
+                return (await Promise.all(children.map((child) => this.filesIn(child)))).flat();
+            },
+            {{-- DICOM Part 10 files carry 'DICM' after a 128 byte preamble, whatever their name. DICOMDIR is the disc's index, not an image. --}}
+            async isDicom(file) {
+                if (file.name.toUpperCase() === 'DICOMDIR' || file.size < 132) {
+                    return false;
+                }
+
+                try {
+                    return (await file.slice(128, 132).text()) === 'DICM';
+                } catch (error) {
+                    return false;
+                }
+            },
+            {{-- CD images are often named without an extension (IMG00001), which Livewire cannot store as a temporary upload. --}}
+            withExtension(file) {
+                return /\.[^.]+$/.test(file.name) ? file : new File([file], file.name + '.dcm', { type: file.type });
+            },
+            async uploadFiles(selected) {
+                if (selected.length === 0) {
+                    return;
+                }
+
+                this.scanning = true;
+                const checks = await Promise.all(selected.map((file) => this.isDicom(file)));
+                const files = selected.filter((file, index) => checks[index]);
+                this.scanning = false;
+
+                this.skipped = selected.length - files.length;
+                this.noDicomFound = files.length === 0;
                 this.tooMany = files.length > this.maxFiles;
-                if (files.length === 0 || this.tooMany) {
+                if (this.noDicomFound || this.tooMany) {
                     return;
                 }
 
@@ -52,33 +126,108 @@
                 await this.$wire.clearResults();
                 this.uploading = true;
                 this.total = files.length;
+                this.current = 0;
+                this.progress = 0;
 
+                if (this.directUploads) {
+                    await this.uploadToStorage(files);
+                } else {
+                    await this.uploadToServer(files);
+                }
+
+                this.uploading = false;
+            },
+            async uploadToServer(files) {
                 for (const [index, file] of files.entries()) {
                     this.current = index + 1;
                     await new Promise((resolve) => this.$wire.upload(
                         'files',
-                        file,
+                        this.withExtension(file),
                         resolve,
                         () => { this.failedFiles.push(file.name); resolve(); },
                         (event) => { this.progress = Math.round((index + event.detail.progress / 100) / files.length * 100); },
                         resolve,
                     ));
                 }
+            },
+            async uploadToStorage(files) {
+                const totalBytes = files.reduce((sum, file) => sum + file.size, 0) || 1;
+                const sent = files.map(() => 0);
+                const showProgress = () => { this.progress = Math.round(sent.reduce((sum, bytes) => sum + bytes, 0) / totalBytes * 100); };
+                let next = 0;
 
-                this.uploading = false;
+                const uploadNext = async () => {
+                    while (next < files.length) {
+                        const index = next++;
+                        const file = files[index];
+
+                        try {
+                            const target = await this.$wire.prepareUpload(file.name, file.size);
+
+                            if (target) {
+                                await this.put(target, file, (bytes) => { sent[index] = bytes; showProgress(); });
+                                await this.$wire.importUpload(target.path, file.name);
+                            }
+                        } catch (error) {
+                            this.failedFiles.push(file.name);
+                        }
+
+                        sent[index] = file.size;
+                        this.current++;
+                        showProgress();
+                    }
+                };
+
+                await Promise.all(Array.from({ length: Math.min(this.parallelUploads, files.length) }, uploadNext));
+                await this.$wire.$refresh();
+            },
+            put(target, file, onProgress) {
+                return new Promise((resolve, reject) => {
+                    const request = new XMLHttpRequest();
+                    request.open('PUT', target.url);
+                    Object.entries(target.headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+                    request.upload.onprogress = (event) => onProgress(event.loaded);
+                    request.onload = () => (request.status < 300 ? resolve() : reject(new Error(`Upload failed with HTTP ${request.status}`)));
+                    request.onerror = () => reject(new Error('Upload failed'));
+                    request.send(file);
+                });
             },
         }"
         class="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <label class="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-700 px-6 py-10 text-center"
-            :class="uploading ? 'cursor-wait opacity-60' : 'cursor-pointer hover:border-sky-600'">
-            <span class="text-sm text-slate-300">Click to choose files</span>
-            <span class="text-xs text-slate-500">Up to {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} files, 100 MB each</span>
-            <input x-on:change="uploadFiles($event.target)" :disabled="uploading" type="file" multiple class="sr-only">
-        </label>
+        <div x-on:dragover.prevent="dragging = true"
+            x-on:dragleave.prevent="dragging = false"
+            x-on:drop.prevent="dropFiles($event)"
+            class="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center"
+            :class="[dragging ? 'border-sky-500 bg-slate-800/60' : 'border-slate-700', (uploading || scanning) ? 'cursor-wait opacity-60' : '']">
+            <div class="flex flex-wrap justify-center gap-3">
+                <label class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white"
+                    :class="(uploading || scanning) ? 'pointer-events-none' : 'cursor-pointer hover:bg-sky-500'">
+                    Choose folder
+                    <input x-on:change="chooseFiles($event.target)" :disabled="uploading || scanning" type="file" webkitdirectory multiple class="sr-only">
+                </label>
+                <label class="rounded-md border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200"
+                    :class="(uploading || scanning) ? 'pointer-events-none' : 'cursor-pointer hover:border-sky-600'">
+                    Choose files
+                    <input x-on:change="chooseFiles($event.target)" :disabled="uploading || scanning" type="file" multiple class="sr-only">
+                </label>
+            </div>
+            <span class="text-sm text-slate-400">or drop files or a folder here</span>
+            <span class="text-xs text-slate-500">Up to {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} DICOM files, 100 MB each. For a CD, choose its DICOM folder or the whole disc.</span>
+        </div>
+
+        <p x-show="scanning" x-cloak class="text-sm text-slate-300">Looking for DICOM files…</p>
+
+        <p x-show="!scanning && skipped > 0 && !noDicomFound" x-cloak class="text-sm text-slate-400">
+            <span x-text="skipped"></span> <span x-text="skipped === 1 ? 'file is' : 'files are'"></span> not DICOM images (for example DICOMDIR or viewer software) and <span x-text="skipped === 1 ? 'was' : 'were'"></span> skipped.
+        </p>
+
+        <p x-show="noDicomFound" x-cloak class="text-sm text-red-400">
+            No DICOM files were found in the selection.
+        </p>
 
         <div x-show="uploading" x-cloak class="flex flex-col gap-1.5">
             <div class="text-sm text-slate-300">
-                Uploading and importing file <span x-text="current"></span> of <span x-text="total"></span>… <span x-text="progress + '%'"></span>
+                Uploading and importing: <span x-text="current"></span> of <span x-text="total"></span> files done… <span x-text="progress + '%'"></span>
             </div>
             <div class="h-2 overflow-hidden rounded bg-slate-800">
                 <div class="h-full bg-sky-500 transition-all" :style="`width: ${progress}%`"></div>
@@ -86,11 +235,11 @@
         </div>
 
         <p x-show="tooMany" x-cloak class="text-sm text-red-400">
-            Upload at most {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} files at a time.
+            The selection contains more than {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} DICOM files. Upload at most {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} at a time, for example one series folder at a time.
         </p>
 
         <div x-show="failedFiles.length > 0" x-cloak class="text-sm text-red-400">
-            <p>These files could not be uploaded. Check that each is 100 MB or smaller and try them again:</p>
+            <p>These files could not be uploaded. Check your connection, and that each is 100 MB or smaller, then try them again:</p>
             <p class="mt-1 text-red-300" x-text="failedFiles.join(', ')"></p>
         </div>
 

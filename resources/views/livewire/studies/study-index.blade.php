@@ -15,7 +15,13 @@
 
     @if ($pendingShareCount > 0)
         <a href="{{ route('shares.pending') }}" class="rounded-md border border-sky-800 bg-sky-950 px-4 py-2 text-sm text-sky-300 hover:bg-sky-900">
-            {{ $pendingShareCount }} {{ Str::plural('study', $pendingShareCount) }} from patients {{ $pendingShareCount === 1 ? 'is' : 'are' }} waiting for you to accept. Review &rarr;
+            {{ $pendingShareCount }} {{ Str::plural('study', $pendingShareCount) }} {{ $pendingShareCount === 1 ? 'is' : 'are' }} waiting for you to accept. Review &rarr;
+        </a>
+    @endif
+
+    @if ($handoverCount > 0)
+        <a href="{{ route('shares.pending') }}" class="rounded-md border border-amber-800 bg-amber-950/60 px-4 py-2 text-sm text-amber-200 hover:bg-amber-950">
+            {{ $handoverCount }} {{ Str::plural('study', $handoverCount) }} shared with you {{ $handoverCount === 1 ? 'is' : 'are' }} no longer kept by {{ $handoverCount === 1 ? 'its owner' : 'their owners' }}. Keep or remove &rarr;
         </a>
     @endif
 
@@ -70,6 +76,8 @@
                             </a>
                             @if ($study->expires_at)
                                 <div class="text-xs text-amber-300">Deleted {{ $study->expires_at->diffForHumans() }}</div>
+                            @elseif ($study->handover_ends_at)
+                                <div class="text-xs text-amber-300">Owner removed it · keep it before {{ $study->handover_ends_at->toFormattedDateString() }}</div>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-slate-300">{{ $study->patient_id ?? '—' }}</td>

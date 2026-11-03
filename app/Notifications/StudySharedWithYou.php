@@ -10,7 +10,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Tells a physician a study was shared with them, or, when a patient shared it, that they can accept it.
+ * Tells a physician a study was shared with them, or, when they have not accepted a share from the sharer before, that they can accept it.
  */
 class StudySharedWithYou extends Notification implements ShouldQueue
 {

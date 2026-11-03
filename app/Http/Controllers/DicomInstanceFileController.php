@@ -3,26 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\DicomInstance;
-use App\Services\Dicom\DicomImporter;
+use App\Services\Dicom\DicomStorage;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class DicomInstanceFileController extends Controller
 {
     /**
-     * Stream the raw DICOM file of an instance to the browser viewer.
+     * Send the raw DICOM file of an instance to the browser viewer, straight from S3 when files are stored there.
      */
-    public function __invoke(DicomInstance $instance): StreamedResponse
+    public function __invoke(DicomInstance $instance, DicomStorage $storage): Response
     {
         Gate::authorize('view', $instance->series->study);
 
-        $disk = Storage::disk(DicomImporter::DISK);
-
-        abort_unless($disk->exists($instance->file_path), 404);
-
-        return $disk->response($instance->file_path, "{$instance->sop_instance_uid}.dcm", [
-            'Content-Type' => 'application/dicom',
+        return $storage->fileResponse($instance->file_path, "{$instance->sop_instance_uid}.dcm", [
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }

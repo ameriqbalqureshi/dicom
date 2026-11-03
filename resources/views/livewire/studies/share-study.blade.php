@@ -5,6 +5,12 @@
     </summary>
 
     <div class="flex flex-col gap-4 border-t border-slate-800 p-4">
+        @if ($isOwner)
+            <p class="text-xs text-slate-400">
+                Physicians you share this study with may keep their own copy if you delete it later{{ $study->expires_at ? ' or when it expires' : '' }}.
+            </p>
+        @endif
+
         @if ($status)
             <p class="rounded-md border border-emerald-800 bg-emerald-950 px-4 py-2 text-sm text-emerald-300">{{ $status }}</p>
         @endif

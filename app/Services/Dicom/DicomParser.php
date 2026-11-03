@@ -77,11 +77,18 @@ class DicomParser
 
     private bool $explicitVr = true;
 
+    private bool $isPartial = false;
+
     /**
+     * Read the header of a DICOM file. Pass $isPartial when the file holds only the first part of a DICOM file: running
+     * out of data before the end of the attributes of interest is then an error rather than the end of the header.
+     *
      * @throws InvalidDicomFileException
      */
-    public function parse(string $path): DicomMetadata
+    public function parse(string $path, bool $isPartial = false): DicomMetadata
     {
+        $this->isPartial = $isPartial;
+
         $stream = @fopen($path, 'rb');
 
         if ($stream === false) {
@@ -192,6 +199,10 @@ class DicomParser
     private function readElementInto(array &$values): bool
     {
         $header = $this->readElementHeader();
+
+        if ($header === null && $this->isPartial) {
+            throw new InvalidDicomFileException('The header extends beyond the part of the file that was read.');
+        }
 
         if ($header === null || $header['group'] > self::LAST_GROUP_OF_INTEREST) {
             return false;

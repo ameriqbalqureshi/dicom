@@ -4,6 +4,7 @@ use App\Livewire\Studies\StudyShow;
 use App\Models\DicomInstance;
 use App\Models\Series;
 use App\Models\Study;
+use App\Models\StudyShare;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -108,4 +109,27 @@ test('users cannot open a study uploaded by someone else', function () {
         ->assertForbidden();
 
     $this->assertModelExists($study);
+});
+
+test('a physician can remove a study shared with them from their study list', function () {
+    $share = StudyShare::factory()->create();
+
+    Livewire::actingAs($share->recipient)
+        ->test(StudyShow::class, ['study' => $share->study])
+        ->assertSee('Remove from my list')
+        ->call('removeFromList')
+        ->assertRedirect(route('studies.index'));
+
+    expect(StudyShare::count())->toBe(0)
+        ->and(Study::count())->toBe(1);
+});
+
+test('the owner of a study is not offered to remove it from their list', function () {
+    $study = Study::factory()->create();
+
+    Livewire::actingAs($study->uploader)
+        ->test(StudyShow::class, ['study' => $study])
+        ->assertDontSee('Remove from my list')
+        ->call('removeFromList')
+        ->assertForbidden();
 });

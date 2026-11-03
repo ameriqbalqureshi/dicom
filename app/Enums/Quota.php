@@ -3,7 +3,9 @@
 namespace App\Enums;
 
 /**
- * The countable actions a package limits. Each has a limit and a usage counter on the subscription.
+ * The countable things a package limits. Uploads limit how many studies the user keeps at a time, whichever package
+ * they were uploaded under; the others count what is done during the package and have a usage counter on the
+ * subscription.
  */
 enum Quota: string
 {
@@ -15,11 +17,19 @@ enum Quota: string
     public function label(): string
     {
         return match ($this) {
-            self::Uploads => 'Study uploads',
+            self::Uploads => 'Studies stored',
             self::Reports => 'Reports signed',
             self::Shares => 'Shares',
             self::GuestLinks => 'Guest links',
         };
+    }
+
+    /**
+     * Whether the quota limits the studies the user keeps, so deleting a study frees it and renewing does not reset it.
+     */
+    public function countsStudiesKept(): bool
+    {
+        return $this === self::Uploads;
     }
 
     public function limitColumn(): string

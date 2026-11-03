@@ -103,7 +103,7 @@ test('confirming a payment starts the package with fresh usage and replaces the 
     $admin = User::factory()->admin()->create();
     $user = User::factory()->physician()->create();
     $previous = $user->subscriptions()->sole();
-    $previous->update(['uploads_used' => 4]);
+    $previous->update(['reports_used' => 4]);
     $package = Package::factory()->create(['duration_days' => 30, 'max_uploads' => 50]);
     $purchase = Subscription::factory()->pending()->for($user)->for($package)->create();
 
@@ -117,7 +117,7 @@ test('confirming a payment starts the package with fresh usage and replaces the 
     expect($purchase->status)->toBe(SubscriptionStatus::Active)
         ->and($purchase->isCurrent())->toBeTrue()
         ->and($purchase->max_uploads)->toBe(50)
-        ->and($purchase->uploads_used)->toBe(0)
+        ->and($purchase->reports_used)->toBe(0)
         ->and($purchase->ends_at->diffInDays(now()->addDays(30), true))->toBeLessThan(1)
         ->and($purchase->reviewed_by)->toBe($admin->id)
         ->and($previous->fresh()->status)->toBe(SubscriptionStatus::Replaced);

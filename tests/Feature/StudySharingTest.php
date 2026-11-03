@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\Role;
+use App\Enums\SenderStatus;
 use App\Enums\ShareOutcome;
+use App\Models\SenderPermission;
 use App\Models\Study;
 use App\Models\StudyShare;
 use App\Models\User;
@@ -22,22 +24,24 @@ function shareAlong(Study $study, array $chain): void
     $sharer = $study->uploader;
 
     foreach ($chain as $recipient) {
+        allowSender($recipient, $sharer);
         sharing()->share($study, $sharer, $recipient);
         $sharer = $recipient;
     }
 }
 
-test('sharing with a physician grants access immediately', function (Role $ownerRole) {
+test('sharing with a physician who allowed the sender grants access immediately', function (Role $ownerRole) {
     $study = Study::factory()->for(User::factory()->state(['role' => $ownerRole]), 'uploader')->create();
     $physician = User::factory()->physician()->create();
+    allowSender($physician, $study->uploader);
 
     expect(sharing()->share($study, $study->uploader, $physician))->toBe(ShareOutcome::Shared)
         ->and($physician->can('view', $study))->toBeTrue()
         ->and(Study::visibleTo($physician)->pluck('id')->all())->toBe([$study->id]);
 })->with([Role::Technician, Role::Physician, Role::Admin]);
 
-test('studies shared by patients wait until the physician accepts them', function () {
-    $study = Study::factory()->for(User::factory()->patient(), 'uploader')->create();
+test('a first share from any sender waits until the physician accepts it', function (Role $ownerRole) {
+    $study = Study::factory()->for(User::factory()->state(['role' => $ownerRole]), 'uploader')->create();
     $physician = User::factory()->physician()->create();
 
     expect(sharing()->share($study, $study->uploader, $physician))->toBe(ShareOutcome::AwaitingAcceptance)
@@ -47,7 +51,22 @@ test('studies shared by patients wait until the physician accepts them', functio
 
     sharing()->accept(StudyShare::sole());
 
-    expect($physician->can('view', $study))->toBeTrue();
+    $nextStudy = Study::factory()->for($study->uploader, 'uploader')->create();
+
+    expect($physician->can('view', $study))->toBeTrue()
+        ->and(SenderPermission::statusOf($physician, $study->uploader))->toBe(SenderStatus::Allowed)
+        ->and(sharing()->share($nextStudy, $study->uploader, $physician))->toBe(ShareOutcome::Shared);
+})->with([Role::Patient, Role::Technician, Role::Physician]);
+
+test('declining a first share does not allow the sender', function () {
+    $study = Study::factory()->create();
+    $physician = User::factory()->physician()->create();
+    sharing()->share($study, $study->uploader, $physician);
+
+    sharing()->revoke(StudyShare::sole());
+
+    expect(SenderPermission::statusOf($physician, $study->uploader))->toBeNull()
+        ->and(sharing()->share($study, $study->uploader, $physician))->toBe(ShareOutcome::AwaitingAcceptance);
 });
 
 test('studies can only be shared with physicians', function (Role $role) {
@@ -147,4 +166,26 @@ test('only the recipient can respond to a pending share, and only its sharer or 
         ->and($study->uploader->can('delete', $forwarded))->toBeTrue()
         ->and($surgeon->can('delete', $forwarded))->toBeFalse()
         ->and($outsider->can('delete', $forwarded))->toBeFalse();
+});
+
+test('a physician can remove a study shared with them from their list, and whoever they forwarded it to keeps it', function () {
+    $study = Study::factory()->create();
+    [$cardiologist, $surgeon] = User::factory()->physician()->count(2)->create();
+    shareAlong($study, [$cardiologist, $surgeon]);
+
+    expect($cardiologist->can('removeFromList', $study))->toBeTrue()
+        ->and($study->uploader->can('removeFromList', $study))->toBeFalse();
+
+    sharing()->removeFromList($study, $cardiologist);
+
+    expect($study->shares()->pluck('user_id')->all())->toBe([$surgeon->id])
+        ->and($cardiologist->can('view', $study))->toBeFalse()
+        ->and($cardiologist->can('removeFromList', $study))->toBeFalse()
+        ->and($surgeon->can('view', $study))->toBeTrue();
+});
+
+test('a pending share cannot be removed from the list, only declined', function () {
+    $share = StudyShare::factory()->pending()->create();
+
+    expect($share->recipient->can('removeFromList', $share->study))->toBeFalse();
 });

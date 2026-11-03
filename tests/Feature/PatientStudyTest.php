@@ -103,17 +103,17 @@ test('guest links stop working when the study expires', function () {
     expect($link->fresh()->isUsable())->toBeFalse();
 });
 
-test('the scheduled clean-up deletes expired studies with their files, shares and guest links', function () {
+test('the scheduled clean-up deletes expired studies no physician can open with their files, shares and guest links', function () {
     Storage::disk('dicom')->put('expired.dcm', 'bytes');
     Storage::disk('dicom')->put('current.dcm', 'bytes');
     $expired = DicomInstance::factory()->create(['file_path' => 'expired.dcm'])->series->study;
     $expired->update(['expires_at' => now()->subMinute()]);
-    StudyShare::factory()->for($expired)->create();
+    StudyShare::factory()->pending()->for($expired)->create();
     GuestLink::factory()->for($expired)->create();
     $current = DicomInstance::factory()->create(['file_path' => 'current.dcm'])->series->study;
     $current->update(['expires_at' => now()->addDay()]);
 
-    $this->artisan('studies:delete-expired')->expectsOutput('Deleted 1 expired study.')->assertSuccessful();
+    $this->artisan('studies:delete-expired')->expectsOutput('Deleted 1 study.')->assertSuccessful();
 
     $this->assertModelMissing($expired);
     $this->assertModelExists($current);

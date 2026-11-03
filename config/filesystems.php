@@ -56,8 +56,9 @@ return [
 
         /*
          * Uploaded studies and physician signatures live on S3 when MEDIA_DISK=s3, otherwise under storage/app/private.
+         * On S3, browsers upload and download studies directly through short-lived signed URLs (direct_transfers).
          */
-        'dicom' => $mediaOnS3 ? [...$s3, 'root' => 'dicom', 'throw' => true] : [
+        'dicom' => $mediaOnS3 ? [...$s3, 'root' => 'dicom', 'throw' => true, 'direct_transfers' => true] : [
             'driver' => 'local',
             'root' => storage_path('app/private/dicom'),
             'throw' => true,

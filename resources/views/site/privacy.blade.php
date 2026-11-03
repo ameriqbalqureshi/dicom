@@ -39,7 +39,9 @@
             <p>
                 A study is visible to the person who uploaded it and to the people they share it with. Physicians may forward a study
                 shared with them to another verified physician; if the original share is withdrawn, everyone it was forwarded to loses
-                access too. Guest links give view-only access for 24 hours and are protected by a PIN unless the person creating the link
+                access too. If you delete a study you have shared, or a patient's study reaches the end of its retention period, the
+                physicians who can open it may each choose to keep their own copy, as a clinician would keep records of a patient they
+                have seen. Guest links give view-only access for 24 hours and are protected by a PIN unless the person creating the link
                 turns it off. Our administrators can access studies when needed to operate and support the service.
             </p>
         </section>
@@ -49,6 +51,7 @@
             <ul>
                 <li>Studies uploaded by patients are deleted automatically after a short retention period.</li>
                 <li>Other studies are kept until the person who uploaded them deletes them or closes their account.</li>
+                <li>When a shared study is deleted or expires, physicians who can open it have {{ config('studies.handover_days') }} days to keep it; it is deleted if nobody does.</li>
                 <li>Billing records are kept for as long as accounting and tax law requires.</li>
             </ul>
         </section>

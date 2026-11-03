@@ -139,6 +139,7 @@ test('expired, revoked and unknown links show that the link is unavailable', fun
 test('a link stops working when its creator loses access to the study', function () {
     $study = Study::factory()->create();
     $physician = User::factory()->physician()->create();
+    allowSender($physician, $study->uploader);
     app(StudySharing::class)->share($study, $study->uploader, $physician);
     $token = guestToken();
     GuestLink::factory()->for($study)->withToken($token)->create(['created_by' => $physician->id]);

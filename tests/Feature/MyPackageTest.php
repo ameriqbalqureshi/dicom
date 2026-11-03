@@ -4,6 +4,7 @@ use App\Enums\Role;
 use App\Enums\SubscriptionStatus;
 use App\Livewire\Billing\MyPackage;
 use App\Models\Package;
+use App\Models\Study;
 use App\Models\Subscription;
 use App\Models\User;
 use Livewire\Livewire;
@@ -12,7 +13,8 @@ test('users see their current package and what they have used', function () {
     $subscription = Subscription::factory()
         ->for(Package::factory()->create(['name' => 'Gold Plan']))
         ->withLimits(['max_uploads' => 10, 'max_reports' => 0])
-        ->create(['uploads_used' => 3]);
+        ->create();
+    Study::factory()->count(3)->create(['uploaded_by' => $subscription->user_id]);
 
     $this->actingAs($subscription->user)->get(route('package.show'))
         ->assertOk()

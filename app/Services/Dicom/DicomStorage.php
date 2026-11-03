@@ -5,6 +5,8 @@ namespace App\Services\Dicom;
 use Carbon\CarbonInterface;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Lays out DICOM files on disk as uploader / study date / study / series / instance, mirroring the DICOM hierarchy.
@@ -12,6 +14,103 @@ use Illuminate\Support\Facades\Storage;
 class DicomStorage
 {
     public const DISK = 'dicom';
+
+    /**
+     * Where browsers upload files directly, before they are imported and moved to their place in the hierarchy.
+     */
+    public const INCOMING_DIRECTORY = 'incoming';
+
+    /**
+     * Minutes a signed link for viewing a file stays valid. The viewer fetches each file as soon as it gets the link.
+     */
+    public const DOWNLOAD_LINK_MINUTES = 10;
+
+    /**
+     * Minutes a signed link for uploading a file stays valid: long enough for a 100 MB file on a slow connection.
+     */
+    public const UPLOAD_LINK_MINUTES = 30;
+
+    /**
+     * Whether browsers can upload files straight to the disk (S3) rather than through the application.
+     */
+    public function supportsDirectUploads(): bool
+    {
+        return $this->usesDirectTransfers();
+    }
+
+    /**
+     * Whether files go between browsers and the disk directly, through signed URLs, which the disk's configuration
+     * turns on for S3. (Laravel's S3 adapter wrongly reports that it cannot sign upload URLs, so this is not detected.)
+     */
+    private function usesDirectTransfers(): bool
+    {
+        return (bool) ($this->disk()->getConfig()['direct_transfers'] ?? false);
+    }
+
+    /**
+     * A new, unique path for a browser to upload one file to.
+     */
+    public function incomingPathFor(?int $uploaderId): string
+    {
+        return self::INCOMING_DIRECTORY.'/'.($uploaderId ?? 'unowned').'/'.Str::uuid().'.dcm';
+    }
+
+    /**
+     * Whether the path is one handed out by incomingPathFor() for this uploader, so nobody can import another person's
+     * upload or any other file on the disk.
+     */
+    public function isIncomingPathOf(string $path, ?int $uploaderId): bool
+    {
+        $prefix = preg_quote(self::INCOMING_DIRECTORY.'/'.($uploaderId ?? 'unowned').'/', '#');
+
+        return preg_match('#^'.$prefix.'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.dcm$#', $path) === 1;
+    }
+
+    /**
+     * A signed URL and the headers a browser must send to PUT a file at the path.
+     *
+     * @return array{url: string, headers: array<string, string>}
+     */
+    public function uploadTarget(string $path): array
+    {
+        ['url' => $url, 'headers' => $headers] = $this->disk()->temporaryUploadUrl($path, now()->addMinutes(self::UPLOAD_LINK_MINUTES));
+
+        return [
+            'url' => $url,
+            'headers' => collect($headers)
+                ->reject(fn ($value, string $name) => in_array(strtolower($name), ['host', 'content-length'], true))
+                ->map(fn ($value) => implode(', ', (array) $value))
+                ->all(),
+        ];
+    }
+
+    /**
+     * The response that gets a file to the browser: a redirect to a short-lived signed URL when the disk provides them
+     * (S3), so the file does not pass through the application, otherwise the file itself.
+     *
+     * @param  array<string, string>  $headers  Headers for the file itself, e.g. Cache-Control.
+     */
+    public function fileResponse(string $path, string $downloadName, array $headers = []): Response
+    {
+        $disk = $this->disk();
+
+        if ($this->usesDirectTransfers()) {
+            $url = $disk->temporaryUrl($path, now()->addMinutes(self::DOWNLOAD_LINK_MINUTES), array_filter([
+                'ResponseContentType' => 'application/dicom',
+                'ResponseContentDisposition' => 'inline; filename="'.$downloadName.'"',
+                'ResponseCacheControl' => $headers['Cache-Control'] ?? null,
+            ]));
+
+            return redirect()->away($url)->withHeaders([
+                'Cache-Control' => 'no-store',
+                'Referrer-Policy' => 'no-referrer',
+            ]);
+        }
+
+        abort_unless($disk->exists($path), 404);
+
+        return $disk->response($path, $downloadName, ['Content-Type' => 'application/dicom', ...$headers]);
+    }
 
     /**
      * The path of an instance's file, e.g. users/7/2024/03/15/{study uid}/{series uid}/{sop instance uid}.dcm.

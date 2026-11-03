@@ -5,12 +5,14 @@ use App\Livewire\Studies\GuestLinks;
 use App\Livewire\Studies\ShareStudy;
 use App\Livewire\Studies\StudyReports;
 use App\Livewire\Studies\UploadStudies;
+use App\Models\Package;
 use App\Models\Report;
 use App\Models\Study;
 use App\Models\StudyShare;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Billing\QuotaExceededException;
+use App\Services\Billing\SubscriptionManager;
 use App\Services\StudySharing;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -36,24 +38,24 @@ function subscriptionOf(User $user): Subscription
     return $user->subscriptions()->sole();
 }
 
-test('each new study counts as one upload, and more files for the same study are free', function () {
+test('the package limits how many studies a user keeps, and more files for a kept study are free', function () {
     $technician = User::factory()->technician()->withLimits(['max_uploads' => 1])->create();
 
     Livewire::actingAs($technician)->test(UploadStudies::class)
         ->set('files', [dicomFileInStudy('1.2.3', '1.2.3.1'), dicomFileInStudy('1.2.3', '1.2.3.2')])
         ->assertSee('Imported.')
         ->set('files', [dicomFileInStudy('1.2.4', '1.2.4.1')])
-        ->assertSee('You have used all 1 study uploads');
+        ->assertSee('You already have 1 study, the most your');
 
     expect(Study::count())->toBe(1)
-        ->and(subscriptionOf($technician)->uploads_used)->toBe(1);
+        ->and(subscriptionOf($technician)->used(Quota::Uploads))->toBe(1);
 
     Livewire::actingAs($technician)->test(UploadStudies::class)
         ->set('files', [dicomFileInStudy('1.2.3', '1.2.3.3')])
         ->assertSee('Imported.');
 });
 
-test('deleting a study does not give the upload back', function () {
+test('deleting a study makes room for another', function () {
     $technician = User::factory()->technician()->withLimits(['max_uploads' => 1])->create();
 
     Livewire::actingAs($technician)->test(UploadStudies::class)->set('files', [dicomFileInStudy('1.2.3', '1.2.3.1')]);
@@ -61,7 +63,22 @@ test('deleting a study does not give the upload back', function () {
 
     Livewire::actingAs($technician)->test(UploadStudies::class)
         ->set('files', [dicomFileInStudy('1.2.4', '1.2.4.1')])
-        ->assertSee('You have used all 1 study uploads');
+        ->assertSee('Imported.');
+
+    expect(Study::sole()->study_instance_uid)->toBe('1.2.4');
+});
+
+test('studies kept under an earlier package still count after renewing', function () {
+    $physician = User::factory()->physician()->withLimits(['max_uploads' => 1])->create();
+    Livewire::actingAs($physician)->test(UploadStudies::class)->set('files', [dicomFileInStudy('1.2.3', '1.2.3.1')]);
+
+    app(SubscriptionManager::class)->assign($physician, Package::factory()->create(['max_uploads' => 1]), User::factory()->admin()->create());
+
+    Livewire::actingAs($physician)->test(UploadStudies::class)
+        ->set('files', [dicomFileInStudy('1.2.4', '1.2.4.1')])
+        ->assertSee('You already have 1 study, the most your');
+
+    expect(Study::count())->toBe(1);
 });
 
 test('files that would go over the storage limit are refused', function () {

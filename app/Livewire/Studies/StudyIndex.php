@@ -69,6 +69,7 @@ class StudyIndex extends Component
             'sharers' => $sharers,
             'sharer' => $sharer,
             'pendingShareCount' => $user->receivedShares()->pending()->count(),
+            'handoverCount' => Study::query()->sharedWith($user)->awaitingHandover()->count(),
             'modalities' => Series::query()
                 ->whereHas('study', fn ($query) => $query->visibleTo($user))
                 ->whereNotNull('modality')->distinct()->orderBy('modality')->pluck('modality'),

@@ -63,7 +63,7 @@ test('pricing shows limits as unlimited, a number or not included', function () 
     ]);
 
     $this->get(route('pricing'))
-        ->assertSee('Unlimited study uploads')
+        ->assertSee('Unlimited studies stored')
         ->assertSee('Reports signed <span class="sr-only">not included</span>', false)
         ->assertSee('25 shares')
         ->assertSee('2 GB of storage');

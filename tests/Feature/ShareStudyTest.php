@@ -10,6 +10,7 @@ use Livewire\Livewire;
 test('owners and physicians the study was shared with see the share panel', function () {
     $study = Study::factory()->for(User::factory()->technician(), 'uploader')->create();
     $physician = User::factory()->physician()->create();
+    allowSender($physician, $study->uploader);
     app(StudySharing::class)->share($study, $study->uploader, $physician);
 
     $this->actingAs($study->uploader)->get(route('studies.show', $study))->assertSeeLivewire(ShareStudy::class)->assertSee('Share this study');
@@ -60,9 +61,10 @@ test('physicians who already have access are marked as such', function () {
         ->assertSee('Already has access');
 });
 
-test('owners can share a study and remove access', function () {
+test('owners can share a study with a physician who allowed them, and remove access', function () {
     $study = Study::factory()->for(User::factory()->technician(), 'uploader')->create();
     $recipient = User::factory()->physician()->create(['name' => 'Jane Cardiologist']);
+    allowSender($recipient, $study->uploader);
 
     $component = Livewire::actingAs($study->uploader)
         ->test(ShareStudy::class, ['study' => $study])
@@ -75,8 +77,8 @@ test('owners can share a study and remove access', function () {
     expect($study->shares()->count())->toBe(0);
 });
 
-test('studies shared by patients wait for the physician to accept', function () {
-    $study = Study::factory()->for(User::factory()->patient(), 'uploader')->create();
+test('a first share waits for the physician to accept', function () {
+    $study = Study::factory()->for(User::factory()->technician(), 'uploader')->create();
     $recipient = User::factory()->physician()->create(['name' => 'Jane Cardiologist']);
 
     Livewire::actingAs($study->uploader)
@@ -104,6 +106,8 @@ test('forwarding physicians see only their own shares while the owner sees all o
     $study = Study::factory()->create();
     $cardiologist = User::factory()->physician()->create(['name' => 'Carl Cardiologist']);
     $surgeon = User::factory()->physician()->create(['name' => 'Sam Surgeon']);
+    allowSender($cardiologist, $study->uploader);
+    allowSender($surgeon, $cardiologist);
     app(StudySharing::class)->share($study, $study->uploader, $cardiologist);
 
     Livewire::actingAs($cardiologist)
@@ -123,6 +127,8 @@ test('forwarding physicians see only their own shares while the owner sees all o
 test('a forwarding physician cannot revoke shares made by others', function () {
     $study = Study::factory()->create();
     [$cardiologist, $colleague] = User::factory()->physician()->count(2)->create();
+    allowSender($cardiologist, $study->uploader);
+    allowSender($colleague, $study->uploader);
     app(StudySharing::class)->share($study, $study->uploader, $cardiologist);
     app(StudySharing::class)->share($study, $study->uploader, $colleague);
 

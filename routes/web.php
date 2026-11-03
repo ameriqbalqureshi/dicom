@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\CommentsPdfController;
 use App\Http\Controllers\DicomInstanceFileController;
+use App\Http\Controllers\GuestCommentsPdfController;
 use App\Http\Controllers\GuestInstanceFileController;
 use App\Http\Controllers\GuestReportPdfController;
 use App\Http\Controllers\LogoutController;
@@ -18,6 +20,7 @@ use App\Livewire\Billing\PaymentIndex;
 use App\Livewire\Guest\GuestStudy;
 use App\Livewire\Profile\EditProfile;
 use App\Livewire\Studies\PendingShares;
+use App\Livewire\Studies\ShareSenders;
 use App\Livewire\Studies\StudyIndex;
 use App\Livewire\Studies\StudyShow;
 use App\Livewire\Studies\UploadStudies;
@@ -45,6 +48,10 @@ Route::get('/guest/{token}/reports/{report}/pdf', GuestReportPdfController::clas
     ->where('token', '[A-Za-z0-9]{'.GuestLinkIssuer::TOKEN_LENGTH.'}')
     ->middleware('throttle:30,1')
     ->name('guest.reports.pdf');
+Route::get('/guest/{token}/comments/pdf', GuestCommentsPdfController::class)
+    ->where('token', '[A-Za-z0-9]{'.GuestLinkIssuer::TOKEN_LENGTH.'}')
+    ->middleware('throttle:30,1')
+    ->name('guest.comments.pdf');
 
 Route::middleware('guest')->group(function () {
     Route::livewire('/login', Login::class)->name('login');
@@ -55,6 +62,7 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::livewire('/email/verify', VerifyEmail::class)->name('verification.notice');
+    Route::livewire('/profile', EditProfile::class)->name('profile.edit');
     Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
         ->middleware(['signed', 'throttle:6,1'])
         ->name('verification.verify');
@@ -73,9 +81,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/reports/{report}/pdf', ReportPdfController::class)->name('reports.pdf');
 
-    Route::livewire('/profile', EditProfile::class)->name('profile.edit');
+    Route::get('/studies/{study}/comments/pdf', CommentsPdfController::class)->name('studies.comments.pdf');
 
     Route::livewire('/requests', PendingShares::class)->name('shares.pending');
+    Route::livewire('/senders', ShareSenders::class)
+        ->middleware('can:manage-senders')
+        ->name('shares.senders');
 
     Route::livewire('/package', MyPackage::class)->name('package.show');
 

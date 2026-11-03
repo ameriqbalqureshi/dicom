@@ -3,14 +3,18 @@
 namespace App\Livewire\Studies;
 
 use App\Enums\Role;
+use App\Models\DicomInstance;
 use App\Models\Study;
 use App\Services\Billing\PackageLimits;
 use App\Services\Billing\QuotaExceededException;
 use App\Services\Dicom\DicomImporter;
+use App\Services\Dicom\DicomStorage;
 use App\Services\Dicom\DuplicateDicomInstanceException;
 use App\Services\Dicom\InvalidDicomFileException;
 use App\Services\Dicom\StudyLimitReachedException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Renderless;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -90,30 +94,100 @@ class UploadStudies extends Component
     }
 
     /**
+     * Hand the browser a signed link to upload one file straight to storage (S3), skipping the application. Returns
+     * null, and records why, when the file cannot be accepted.
+     *
+     * @return array{path: string, url: string, headers: array<string, string>}|null
+     */
+    #[Renderless]
+    public function prepareUpload(string $name, int $size, DicomStorage $storage, PackageLimits $limits): ?array
+    {
+        $user = auth()->user();
+        $this->authorize('create', Study::class);
+
+        if (! $storage->supportsDirectUploads()) {
+            abort(404);
+        }
+
+        if ($size < 1 || $size > DicomImporter::MAX_FILE_SIZE) {
+            $this->addFailure($name, 'Each file must be 100 MB or smaller.');
+
+            return null;
+        }
+
+        try {
+            $limits->ensureStorageFor($user, $size);
+        } catch (QuotaExceededException $exception) {
+            $this->addFailure($name, $exception->getMessage());
+
+            return null;
+        }
+
+        $path = $storage->incomingPathFor($user->id);
+
+        return ['path' => $path, ...$storage->uploadTarget($path)];
+    }
+
+    /**
+     * Import a file the browser has uploaded with a link from prepareUpload().
+     */
+    public function importUpload(string $path, string $name, DicomStorage $storage, DicomImporter $importer): void
+    {
+        $user = auth()->user();
+        $this->authorize('create', Study::class);
+
+        if (! $storage->isIncomingPathOf($path, $user->id)) {
+            abort(403);
+        }
+
+        $this->results[] = $this->importWith(Str::limit($name, 255), fn () => $importer->importUploaded($path, $user));
+    }
+
+    /**
+     * Record a file that was refused before it was uploaded. The render this needs happens on the next request.
+     */
+    private function addFailure(string $name, string $message): void
+    {
+        $this->results[] = ['name' => Str::limit($name, 255), 'status' => 'failed', 'message' => $message, 'studyId' => null];
+    }
+
+    /**
      * @return array{name: string, status: string, message: string, studyId: int|null}
      */
     private function importFile(DicomImporter $importer, TemporaryUploadedFile $file): array
     {
-        $name = $file->getClientOriginalName();
-
         try {
-            $instance = $importer->import($file->getRealPath(), auth()->user());
+            return $this->importWith($file->getClientOriginalName(), fn () => $importer->import($file->getRealPath(), auth()->user()));
+        } finally {
+            $file->delete();
+        }
+    }
+
+    /**
+     * Run an import and describe its outcome for the results table.
+     *
+     * @param  callable(): DicomInstance  $import
+     * @return array{name: string, status: string, message: string, studyId: int|null}
+     */
+    private function importWith(string $name, callable $import): array
+    {
+        try {
+            $instance = $import();
 
             return ['name' => $name, 'status' => 'imported', 'message' => 'Imported.', 'studyId' => $instance->series->study_id];
         } catch (DuplicateDicomInstanceException) {
             return ['name' => $name, 'status' => 'skipped', 'message' => 'Already uploaded.', 'studyId' => null];
         } catch (InvalidDicomFileException|StudyLimitReachedException|QuotaExceededException $exception) {
             return ['name' => $name, 'status' => 'failed', 'message' => $exception->getMessage(), 'studyId' => null];
-        } finally {
-            $file->delete();
         }
     }
 
-    public function render(PackageLimits $limits): View
+    public function render(PackageLimits $limits, DicomStorage $storage): View
     {
         $user = auth()->user();
 
         return view('livewire.studies.upload-studies', [
+            'directUploads' => $storage->supportsDirectUploads(),
             'isPatient' => $user->role === Role::Patient,
             'currentStudy' => $user->role === Role::Patient ? $user->uploadedStudies()->unexpired()->first() : null,
             'subscription' => $user->isAdmin() ? null : $limits->current($user),

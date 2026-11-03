@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\SenderPermission;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +46,10 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Let the physician receive the sender's shares straight away, as if they had accepted one before.
+ */
+function allowSender(User $recipient, User $sender): void
 {
-    // ..
+    SenderPermission::factory()->create(['recipient_id' => $recipient->id, 'sender_id' => $sender->id]);
 }

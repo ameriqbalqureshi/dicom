@@ -81,6 +81,7 @@ class GuestStudy extends Component
             'reports' => $link?->isUnlocked()
                 ? $link->study->reports()->final()->with(['author', 'addenda'])->oldest('finalized_at')->get()
                 : collect(),
+            'comments' => $link?->isUnlocked() ? $link->study->comments()->with('author')->get() : collect(),
             'viewerSeries' => $link?->isUnlocked()
                 ? ViewerSeries::forStudy($link->study, fn (DicomInstance $instance): string => route('guest.instances.file', [$this->token, $instance]))
                 : [],

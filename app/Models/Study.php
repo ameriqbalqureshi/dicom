@@ -35,7 +35,9 @@ class Study extends Model
         'study_description',
         'accession_number',
         'uploaded_by',
+        'released_by',
         'expires_at',
+        'handover_ends_at',
     ];
 
     /**
@@ -49,7 +51,17 @@ class Study extends Model
             'patient_birth_date' => 'date',
             'study_date' => 'date',
             'expires_at' => 'datetime',
+            'handover_ends_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether the owner has given the study up (deleted it, or it expired) and the physicians who can open it are
+     * deciding whether to keep it. Such a study has no owner until one of them does.
+     */
+    public function isAwaitingHandover(): bool
+    {
+        return $this->handover_ends_at !== null;
     }
 
     /**
@@ -85,6 +97,16 @@ class Study extends Model
     }
 
     /**
+     * The owner who gave the study up, while it is awaiting handover.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function formerOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'released_by');
+    }
+
+    /**
      * The physicians this study has been shared with, by its owner or by forwarding, including pending shares.
      *
      * @return HasMany<StudyShare, $this>
@@ -110,6 +132,16 @@ class Study extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(Report::class);
+    }
+
+    /**
+     * Notes about the study from anyone who can open it, oldest first.
+     *
+     * @return HasMany<StudyComment, $this>
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(StudyComment::class)->oldest()->oldest('id');
     }
 
     /**
@@ -158,6 +190,26 @@ class Study extends Model
     public function scopeExpired(Builder $query): void
     {
         $query->where('expires_at', '<=', now());
+    }
+
+    /**
+     * @param  Builder<Study>  $query
+     */
+    public function scopeAwaitingHandover(Builder $query): void
+    {
+        $query->whereNotNull('handover_ends_at');
+    }
+
+    /**
+     * Studies awaiting handover that nobody will keep: the time to decide is over, or nobody can open them any more.
+     *
+     * @param  Builder<Study>  $query
+     */
+    public function scopeAbandoned(Builder $query): void
+    {
+        $query->awaitingHandover()->where(fn (Builder $query) => $query
+            ->where('handover_ends_at', '<=', now())
+            ->orWhereDoesntHave('shares', fn (Builder $query) => $query->accepted()));
     }
 
     /**

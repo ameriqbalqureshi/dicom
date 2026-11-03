@@ -33,7 +33,7 @@ test('the study list and navigation point physicians to pending studies', functi
     $this->actingAs($physician)
         ->get(route('studies.index'))
         ->assertSee(route('shares.pending'))
-        ->assertSee('1 study from patients is waiting for you to accept.');
+        ->assertSee('1 study is waiting for you to accept.');
 });
 
 test('accepting a study makes it visible', function () {

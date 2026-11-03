@@ -3,7 +3,10 @@
 use App\Enums\Role;
 use App\Livewire\Profile\EditProfile;
 use App\Models\User;
+use App\Notifications\Auth\VerifyEmailNotification;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -18,9 +21,93 @@ test('physicians can open their profile from the navigation', function () {
         ->assertSee('Registration number');
 });
 
-test('only physicians have a profile page', function (Role $role) {
-    $this->actingAs(User::factory()->create(['role' => $role]))->get(route('profile.edit'))->assertForbidden();
+test('everyone has a profile page, but only physicians have report details', function (Role $role) {
+    $user = User::factory()->create(['role' => $role]);
+
+    $this->actingAs($user)->get(route('profile.edit'))
+        ->assertOk()
+        ->assertSee(route('profile.edit'))
+        ->assertSee('Change password')
+        ->assertDontSee('Registration number');
+
+    Livewire::actingAs($user)->test(EditProfile::class)->call('save')->assertForbidden();
 })->with([Role::Admin, Role::Technician, Role::Patient]);
+
+test('users can change their name without their password', function () {
+    $admin = User::factory()->admin()->create();
+
+    Livewire::actingAs($admin)->test(EditProfile::class)
+        ->set('name', ' New Name ')
+        ->call('saveAccount')
+        ->assertHasNoErrors()
+        ->assertSee('Account details saved.');
+
+    expect($admin->fresh()->name)->toBe('New Name')
+        ->and($admin->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+test('changing the email address needs the current password and a confirmation of the new address', function () {
+    Notification::fake();
+    $user = User::factory()->admin()->create(['email' => 'old@clinic.test']);
+
+    Livewire::actingAs($user)->test(EditProfile::class)
+        ->set('email', 'new@clinic.test')
+        ->call('saveAccount')
+        ->assertHasErrors(['emailPassword' => 'required'])
+        ->set('emailPassword', 'wrong-password')
+        ->call('saveAccount')
+        ->assertHasErrors(['emailPassword' => 'current_password']);
+
+    expect($user->fresh()->email)->toBe('old@clinic.test');
+
+    Livewire::actingAs($user)->test(EditProfile::class)
+        ->set('email', 'new@clinic.test')
+        ->set('emailPassword', 'password')
+        ->call('saveAccount')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('verification.notice'));
+
+    $user->refresh();
+    expect($user->email)->toBe('new@clinic.test')
+        ->and($user->hasVerifiedEmail())->toBeFalse();
+    Notification::assertSentTo($user, VerifyEmailNotification::class);
+});
+
+test('the new email address must not belong to someone else', function () {
+    User::factory()->create(['email' => 'taken@clinic.test']);
+
+    Livewire::actingAs(User::factory()->create())->test(EditProfile::class)
+        ->set('email', 'taken@clinic.test')
+        ->set('emailPassword', 'password')
+        ->call('saveAccount')
+        ->assertHasErrors(['email' => 'unique']);
+});
+
+test('users waiting to confirm their email can still open their profile to correct it', function () {
+    $this->actingAs(User::factory()->unverified()->create())->get(route('profile.edit'))->assertOk();
+});
+
+test('changing the password needs the current password and a confirmed new one', function () {
+    $user = User::factory()->technician()->create();
+
+    Livewire::actingAs($user)->test(EditProfile::class)
+        ->set('currentPassword', 'wrong-password')
+        ->set('password', 'a-new-long-password')
+        ->set('password_confirmation', 'something-else')
+        ->call('updatePassword')
+        ->assertHasErrors(['currentPassword' => 'current_password', 'password' => 'confirmed']);
+
+    Livewire::actingAs($user)->test(EditProfile::class)
+        ->set('currentPassword', 'password')
+        ->set('password', 'a-new-long-password')
+        ->set('password_confirmation', 'a-new-long-password')
+        ->call('updatePassword')
+        ->assertHasNoErrors()
+        ->assertSet('currentPassword', '')
+        ->assertSee('Password changed.');
+
+    expect(Hash::check('a-new-long-password', $user->fresh()->password))->toBeTrue();
+});
 
 test('physicians can save their credentials and signature', function () {
     $physician = User::factory()->physician()->create();
@@ -31,7 +118,7 @@ test('physicians can save their credentials and signature', function () {
         ->set('signature', UploadedFile::fake()->image('signature.png', 300, 100))
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSee('Profile saved.');
+        ->assertSee('Report details saved.');
 
     $physician->refresh();
 

@@ -50,11 +50,27 @@ class StudyPolicy
      */
     public function share(User $user, Study $study): bool
     {
-        if ($study->isExpired()) {
+        if ($study->isExpired() || $study->isAwaitingHandover()) {
             return false;
         }
 
         return $study->uploader()->is($user) || ($user->isPhysician() && $this->isSharedWith($user, $study));
+    }
+
+    /**
+     * Determine whether the user can remove a study shared with them from their list, giving up their access to it.
+     */
+    public function removeFromList(User $user, Study $study): bool
+    {
+        return ! $study->uploader()->is($user) && $this->isSharedWith($user, $study);
+    }
+
+    /**
+     * Determine whether the user can keep a study its owner gave up, becoming its owner.
+     */
+    public function keep(User $user, Study $study): bool
+    {
+        return $study->isAwaitingHandover() && $this->isSharedWith($user, $study);
     }
 
     /**
@@ -63,7 +79,7 @@ class StudyPolicy
      */
     public function createGuestLink(User $user, Study $study): bool
     {
-        if ($study->isExpired()) {
+        if ($study->isExpired() || $study->isAwaitingHandover()) {
             return false;
         }
 

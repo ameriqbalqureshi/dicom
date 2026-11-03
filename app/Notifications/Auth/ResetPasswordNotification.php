@@ -3,13 +3,8 @@
 namespace App\Notifications\Auth;
 
 use Illuminate\Auth\Notifications\ResetPassword;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Laravel's password reset message, sent from the queue so the request does not wait for the mail server.
+ * Laravel's password reset message, sent immediately (not queued) so the user receives it while waiting.
  */
-class ResetPasswordNotification extends ResetPassword implements ShouldQueue
-{
-    use Queueable;
-}
+class ResetPasswordNotification extends ResetPassword {}

@@ -49,6 +49,13 @@ class ShareStudy extends Component
             return;
         }
 
+        if ($outcome === ShareOutcome::NotDelivered) {
+            $this->status = null;
+            $this->addError('search', "Your share to {$recipient->name} was not delivered.");
+
+            return;
+        }
+
         $this->status = match ($outcome) {
             ShareOutcome::Shared => "Shared with {$recipient->name}.",
             ShareOutcome::AwaitingAcceptance => "Sent to {$recipient->name}. They can open the study once they accept it.",

@@ -48,7 +48,8 @@ class PackageLimits
     }
 
     /**
-     * Use the quota once, counting it against the current package.
+     * Use the quota once, counting it against the current package. Quotas on the studies kept have no counter: the
+     * study must be created in the same transaction as this call, which holds the lock until it commits.
      *
      * @throws QuotaExceededException
      */
@@ -63,7 +64,9 @@ class PackageLimits
 
             $this->ensureWithin($subscription, $quota);
 
-            $subscription->increment($quota->usageColumn());
+            if (! $quota->countsStudiesKept()) {
+                $subscription->increment($quota->usageColumn());
+            }
         });
     }
 

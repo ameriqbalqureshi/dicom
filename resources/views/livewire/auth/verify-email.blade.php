@@ -3,6 +3,7 @@
     <p class="text-slate-300">
         We sent a link to <span class="font-medium text-white">{{ auth()->user()->email }}</span>. Open it to confirm your address and start your free trial.
     </p>
+    <p class="text-slate-400">Wrong address? <a href="{{ route('profile.edit') }}" class="text-sky-400 hover:text-sky-300">Change it on your profile</a>.</p>
 
     @if (auth()->user()->isPhysician() && ! auth()->user()->isVerifiedPhysician())
         <p class="text-slate-400">We will also check your medical registration, so colleagues can share studies with you and you can sign reports.</p>

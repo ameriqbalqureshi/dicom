@@ -30,10 +30,13 @@
                         @if (auth()->user()->isPhysician())
                             <x-nav-link :href="route('shares.pending')" :active="request()->routeIs('shares.pending')">
                                 Requests
-                                @php($pendingShareCount = auth()->user()->receivedShares()->pending()->count())
-                                @if ($pendingShareCount > 0)
-                                    <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingShareCount }}</span>
+                                @php($openRequestCount = auth()->user()->openRequestCount())
+                                @if ($openRequestCount > 0)
+                                    <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $openRequestCount }}</span>
                                 @endif
+                            </x-nav-link>
+                            <x-nav-link :href="route('shares.senders')" :active="request()->routeIs('shares.senders')">
+                                Senders
                             </x-nav-link>
                         @endif
 
@@ -63,9 +66,7 @@
                         <a href="{{ route('package.show') }}" class="{{ request()->routeIs('package.show') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Package</a>
                     @endunless
 
-                    @if (auth()->user()->isPhysician())
-                        <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.edit') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Profile</a>
-                    @endif
+                    <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.edit') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Profile</a>
 
                     <span class="text-slate-400">
                         {{ auth()->user()->name }}

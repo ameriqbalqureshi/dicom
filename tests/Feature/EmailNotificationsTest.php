@@ -32,6 +32,7 @@ beforeEach(function () {
 test('physicians are emailed when a study is shared with them', function () {
     $study = Study::factory()->for(User::factory()->technician(), 'uploader')->create();
     $physician = User::factory()->physician()->create();
+    allowSender($physician, $study->uploader);
 
     app(StudySharing::class)->share($study, $study->uploader, $physician);
 

@@ -58,6 +58,27 @@
             </section>
         @endif
 
+        @if ($comments->isNotEmpty())
+            <section class="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <h2 class="text-sm font-medium">Comments <span class="ml-1 text-slate-400">({{ $comments->count() }})</span></h2>
+                    <a href="{{ route('guest.comments.pdf', $token) }}" target="_blank" class="text-sm text-sky-400 hover:text-sky-300">Download PDF</a>
+                </div>
+
+                @foreach ($comments as $comment)
+                    <article wire:key="comment-{{ $comment->id }}" class="flex flex-col gap-2 rounded-md border border-slate-800 p-3 text-sm">
+                        <div>
+                            <span class="font-medium">{{ $comment->authorName() }}</span>
+                            <span class="ml-1 text-xs text-slate-400" title="{{ $comment->created_at->toDayDateTimeString() }}">
+                                {{ $comment->created_at->diffForHumans() }}@if ($comment->isEdited()) · edited @endif
+                            </span>
+                        </div>
+                        <p class="whitespace-pre-line text-slate-200">{{ $comment->body }}</p>
+                    </article>
+                @endforeach
+            </section>
+        @endif
+
         @if ($viewerSeries === [])
             <p class="rounded-xl border border-slate-800 px-4 py-10 text-center text-slate-400">This study has no images.</p>
         @else
