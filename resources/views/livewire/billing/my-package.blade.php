@@ -1,5 +1,8 @@
 <div class="flex max-w-5xl flex-col gap-6">
-    <h1 class="text-2xl font-semibold tracking-tight">Package</h1>
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 class="text-2xl font-semibold tracking-tight">Package</h1>
+        <span class="text-sm text-slate-400">Your user ID: <span class="select-all font-mono text-slate-200">{{ auth()->id() }}</span></span>
+    </div>
 
     @if ($status)
         <p class="rounded-md border border-emerald-800 bg-emerald-950 px-4 py-2 text-sm text-emerald-300">{{ $status }}</p>
@@ -63,8 +66,14 @@
             <div>
                 <div class="font-medium text-sky-200">{{ $pending->package->name }} · awaiting payment confirmation</div>
                 <div class="text-xs text-slate-400">
-                    {{ number_format($pending->amount) }} {{ $currency }} by {{ $paymentMethods[$pending->payment_method] ?? $pending->payment_method }},
-                    reference {{ $pending->payment_reference }} · submitted {{ $pending->created_at->diffForHumans() }}
+                    {{ number_format($pending->amount) }} {{ $currency }} into {{ $pending->payment_method }}
+                    @if ($pending->payment_reference)
+                        · reference {{ $pending->payment_reference }}
+                    @endif
+                    @if ($pending->receipt_path)
+                        · receipt attached
+                    @endif
+                    · submitted {{ $pending->created_at->diffForHumans() }}
                 </div>
             </div>
             <button type="button" wire:click="cancelPending({{ $pending->id }})" wire:confirm="Cancel this purchase?" class="text-red-400 hover:text-red-300">Cancel</button>
@@ -118,21 +127,37 @@
                 @include('billing.partials.payment-accounts')
 
                 <label class="flex flex-col gap-1 text-sm">
-                    <span class="text-slate-300">Paid by</span>
-                    <select wire:model="paymentMethod" class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2">
+                    <span class="text-slate-300">Paid into</span>
+                    <select wire:model="paymentAccountId" class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2">
                         <option value="">Choose…</option>
-                        @foreach ($paymentMethods as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
+                        @foreach ($accounts as $account)
+                            <option value="{{ $account->id }}">{{ $account->name }}</option>
                         @endforeach
                     </select>
-                    @error('paymentMethod') <span class="text-red-400">{{ $message }}</span> @enderror
+                    @error('paymentAccountId') <span class="text-red-400">{{ $message }}</span> @enderror
                 </label>
 
                 <label class="flex flex-col gap-1 text-sm">
-                    <span class="text-slate-300">Transaction reference</span>
+                    <span class="text-slate-300">Receipt <span class="text-slate-500">(photo or PDF, up to 5 MB)</span></span>
+                    <input wire:model="receipt" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf"
+                        class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 file:mr-3 file:rounded file:border-0 file:bg-slate-800 file:px-3 file:py-1 file:text-slate-200">
+                    <span wire:loading wire:target="receipt" class="text-slate-400">Uploading…</span>
+                    @error('receipt') <span class="text-red-400">{{ $message }}</span> @enderror
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm">
+                    <span class="text-slate-300">Transaction reference <span class="text-slate-500">(if you have no receipt to attach)</span></span>
                     <input wire:model="paymentReference" type="text" class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 focus:border-sky-500 focus:outline-none">
                     @error('paymentReference') <span class="text-red-400">{{ $message }}</span> @enderror
                 </label>
+
+                @if ($receiptEmail)
+                    <p class="text-xs text-slate-400">
+                        Prefer email? Skip this form and send the receipt to
+                        <a href="mailto:{{ $receiptEmail }}" class="text-sky-400 hover:text-sky-300">{{ $receiptEmail }}</a>
+                        with your user ID ({{ auth()->id() }}) and the package you paid for.
+                    </p>
+                @endif
             @endunless
 
             <label class="flex flex-col gap-1 text-sm">
@@ -144,7 +169,7 @@
             <p class="text-xs text-slate-400">Your new package replaces your current one when it starts, and its limits start from zero.</p>
 
             <div class="flex items-center gap-3">
-                <button type="submit" class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500">
+                <button type="submit" wire:loading.attr="disabled" wire:target="receipt,purchase" class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-60">
                     {{ $selectedPackage->isFree() ? 'Start package' : 'Submit payment' }}
                 </button>
                 <button type="button" wire:click="cancelChoice" class="text-sm text-slate-400 hover:text-white">Cancel</button>
@@ -169,6 +194,9 @@
                         </div>
                         <div class="text-xs text-slate-400">
                             {{ $subscription->statusLabel() }} · {{ $subscription->created_at->toFormattedDateString() }}
+                            @if ($subscription->isPaymentConfirmed())
+                                · <a href="{{ route('package.receipt', $subscription) }}" target="_blank" class="text-sky-400 hover:text-sky-300">Receipt</a>
+                            @endif
                         </div>
                     </li>
                 @endforeach

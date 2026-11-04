@@ -3,14 +3,15 @@
 namespace App\Services;
 
 use App\Models\Study;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Dicom\StudyDeleter;
 use Illuminate\Support\Facades\Storage;
 
 /**
  * Deletes a user together with everything that belongs to them: the studies they uploaded (with their files, reports,
- * shares and guest links), every share they made or received, and their signature image. Reports they wrote on other
- * people's studies are kept, without an author.
+ * shares and guest links), every share they made or received, their signature image and their payment receipts. Reports
+ * they wrote on other people's studies are kept, without an author.
  */
 class UserDeleter
 {
@@ -33,6 +34,10 @@ class UserDeleter
         if ($user->signature_path !== null) {
             Storage::disk(User::SIGNATURE_DISK)->delete($user->signature_path);
         }
+
+        Storage::disk(Subscription::RECEIPT_DISK)->delete(
+            $user->subscriptions()->whereNotNull('receipt_path')->pluck('receipt_path')->all(),
+        );
 
         $user->delete();
 

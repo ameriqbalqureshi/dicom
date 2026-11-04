@@ -102,6 +102,23 @@ class User extends Authenticatable implements MustVerifyEmail
         });
     }
 
+    /**
+     * The non-administrator account with the given user ID or email address.
+     */
+    public static function findAccountHolder(string $idOrEmail): ?self
+    {
+        $idOrEmail = trim($idOrEmail);
+
+        return static::query()
+            ->where('role', '!=', Role::Admin)
+            ->when(
+                ctype_digit($idOrEmail),
+                fn (Builder $query) => $query->whereKey((int) $idOrEmail),
+                fn (Builder $query) => $query->whereRaw('LOWER(email) = ?', [mb_strtolower($idOrEmail)]),
+            )
+            ->first();
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === Role::Admin;

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\Role;
 use App\Models\Package;
+use App\Models\PaymentAccount;
 use App\Models\User;
 use App\Services\Billing\SubscriptionManager;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -14,7 +15,7 @@ class DatabaseSeeder extends Seeder
     use WithoutModelEvents;
 
     /**
-     * Seed the application's database with one account per role, each on their role's trial, and example packages.
+     * Seed the application's database with one account per role, each on their role's trial, and example packages and payment accounts.
      */
     public function run(SubscriptionManager $subscriptions): void
     {
@@ -52,6 +53,18 @@ class DatabaseSeeder extends Seeder
             'max_reports' => 0,
             'max_shares' => 5,
             'max_guest_links' => 5,
+        ]);
+
+        PaymentAccount::factory()->create([
+            'name' => 'Example Bank',
+            'account_title' => 'Example Account Title',
+            'sort_order' => 1,
+        ]);
+
+        PaymentAccount::factory()->mobileWallet()->create([
+            'name' => 'JazzCash',
+            'account_title' => 'Example Account Title',
+            'sort_order' => 2,
         ]);
 
         User::factory()->admin()->create([

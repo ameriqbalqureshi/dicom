@@ -15,29 +15,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Payment methods
-    |--------------------------------------------------------------------------
-    |
-    | Payments are made outside the application. The buyer chooses how they
-    | paid and enters the transaction reference, and an administrator
-    | confirms the payment before the package is activated.
-    |
-    */
-
-    'payment_methods' => [
-        'bank_transfer' => 'Bank transfer',
-        'jazzcash' => 'JazzCash',
-        'easypaisa' => 'Easypaisa',
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Payment accounts
     |--------------------------------------------------------------------------
     |
-    | The accounts buyers pay into, for each payment method above, shown at
-    | checkout and on the pricing page. Empty details are not shown, and a
-    | method without any details shows only the payment instructions.
+    | Administrators manage the accounts buyers pay into on the Payment accounts
+    | page. These values are only read once, when the migration that created
+    | that page brings across any accounts set up here before it existed.
     |
     */
 
@@ -64,10 +47,11 @@ return [
     | Payment instructions
     |--------------------------------------------------------------------------
     |
-    | Shown to buyers before they submit a purchase, e.g. the account to pay.
+    | The instructions shown to buyers until an administrator changes them on
+    | the Payment accounts page.
     |
     */
 
-    'payment_instructions' => env('BILLING_PAYMENT_INSTRUCTIONS', 'Pay the package price to our account, then enter the transaction reference below. Your package starts as soon as we confirm the payment.'),
+    'payment_instructions' => env('BILLING_PAYMENT_INSTRUCTIONS', 'Pay the package price into one of our accounts, then send us your receipt. Your package starts as soon as we confirm the payment.'),
 
 ];

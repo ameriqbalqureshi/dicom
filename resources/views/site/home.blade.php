@@ -54,7 +54,7 @@
         ['question' => 'Do I need to install anything?', 'answer' => 'No. Everything runs in a modern web browser on Windows, macOS or Linux. Images are decoded in your browser, so there is nothing to download or configure.'],
         ['question' => 'Which images are supported?', 'answer' => 'Standard DICOM files, including multi-frame X-ray angiography, CT, MR and other greyscale modalities, uncompressed or JPEG lossless. Select the files from a CD or the modality and we sort them into studies and series.'],
         ['question' => 'Who can see my studies?', 'answer' => 'Only you and the people you choose. Studies can be shared with physicians we have verified, and you can stop sharing at any time; when you do, anyone the study was forwarded to loses access too.'],
-        ['question' => 'How do I pay for a package?', 'answer' => 'Choose a package in your account, pay by bank transfer, JazzCash or Easypaisa, and enter the transaction reference. Your package starts as soon as we confirm the payment.'],
+        ['question' => 'How do I pay for a package?', 'answer' => 'Choose a package, pay into one of our bank or mobile accounts, and send us your receipt. Your package starts as soon as we confirm the payment.'],
         ['question' => 'What happens to patient uploads?', 'answer' => 'To protect patient privacy, studies uploaded by patients are kept for a limited time and then deleted automatically.'],
         ['question' => 'Is this a replacement for our PACS?', 'answer' => 'No. It is built for sharing and reviewing studies between people and places that do not share a PACS: referrals, second opinions and remote reporting.'],
     ];

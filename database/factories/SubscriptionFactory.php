@@ -48,7 +48,7 @@ class SubscriptionFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'status' => SubscriptionStatus::Pending,
             'amount' => 5000,
-            'payment_method' => 'bank_transfer',
+            'payment_method' => 'Test Bank',
             'payment_reference' => fake()->bothify('TXN-#######'),
             'starts_at' => null,
             'ends_at' => null,

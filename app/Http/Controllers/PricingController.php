@@ -32,7 +32,6 @@ class PricingController extends Controller
                 ->orderBy('price')
                 ->get(),
             'currency' => config('billing.currency'),
-            'paymentMethods' => config('billing.payment_methods'),
         ]);
     }
 }

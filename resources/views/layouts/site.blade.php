@@ -83,6 +83,7 @@
                     <a href="{{ route('home') }}#features" class="text-slate-400 hover:text-white">Features</a>
                     <a href="{{ route('pricing') }}" class="text-slate-400 hover:text-white">Pricing</a>
                     <a href="{{ route('home') }}#faq" class="text-slate-400 hover:text-white">FAQ</a>
+                    <a href="{{ route('payment-receipt') }}" class="text-slate-400 hover:text-white">Send a payment receipt</a>
                     <a href="{{ route('register') }}" class="text-slate-400 hover:text-white">Create an account</a>
                 </div>
 

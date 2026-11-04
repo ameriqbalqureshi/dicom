@@ -4,6 +4,9 @@ namespace App\Livewire\Billing;
 
 use App\Enums\Quota;
 use App\Models\Package;
+use App\Models\PaymentAccount;
+use App\Models\Subscription;
+use App\Services\Billing\BillingSettings;
 use App\Services\Billing\PackageLimits;
 use App\Services\Billing\SubscriptionManager;
 use Illuminate\Contracts\View\View;
@@ -11,6 +14,8 @@ use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 /**
  * Shows users their current package and what they have used of it, and lets them buy another package. Paid packages are
@@ -19,11 +24,16 @@ use Livewire\Component;
 #[Title('Package')]
 class MyPackage extends Component
 {
+    use WithFileUploads;
+
     public ?int $selectedPackageId = null;
 
-    public string $paymentMethod = '';
+    public string $paymentAccountId = '';
 
     public string $paymentReference = '';
+
+    /** @var TemporaryUploadedFile|null */
+    public $receipt = null;
 
     public string $notes = '';
 
@@ -37,13 +47,13 @@ class MyPackage extends Component
     public function choose(int $packageId): void
     {
         $this->selectedPackageId = $this->purchasablePackage($packageId)->id;
-        $this->reset('paymentMethod', 'paymentReference', 'notes', 'status');
+        $this->reset('paymentAccountId', 'paymentReference', 'receipt', 'notes', 'status');
         $this->resetValidation();
     }
 
     public function cancelChoice(): void
     {
-        $this->reset('selectedPackageId', 'paymentMethod', 'paymentReference', 'notes');
+        $this->reset('selectedPackageId', 'paymentAccountId', 'paymentReference', 'receipt', 'notes');
         $this->resetValidation();
     }
 
@@ -52,18 +62,23 @@ class MyPackage extends Component
         $package = $this->purchasablePackage((int) $this->selectedPackageId);
 
         $validated = $this->validate($package->isFree() ? ['notes' => ['nullable', 'string', 'max:1000']] : [
-            'paymentMethod' => ['required', Rule::in(array_keys(config('billing.payment_methods')))],
-            'paymentReference' => ['required', 'string', 'max:100'],
+            'paymentAccountId' => ['required', Rule::exists(PaymentAccount::class, 'id')->where('is_active', true)],
+            'paymentReference' => ['required_without:receipt', 'nullable', 'string', 'max:100'],
+            'receipt' => ['required_without:paymentReference', 'nullable', ...Subscription::receiptFileRules()],
             'notes' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'paymentReference.required_without' => 'Attach your receipt or enter the transaction reference.',
+            'receipt.required_without' => 'Attach your receipt or enter the transaction reference.',
         ]);
 
         try {
             $subscription = $subscriptions->purchase(
                 auth()->user(),
                 $package,
-                $validated['paymentMethod'] ?? null,
-                isset($validated['paymentReference']) ? trim($validated['paymentReference']) : null,
+                isset($validated['paymentAccountId']) ? PaymentAccount::findOrFail($validated['paymentAccountId'])->name : null,
+                filled($validated['paymentReference'] ?? null) ? trim($validated['paymentReference']) : null,
                 filled($validated['notes']) ? $validated['notes'] : null,
+                $validated['receipt'] ?? null,
             );
         } catch (InvalidArgumentException $exception) {
             $this->addError('purchase', $exception->getMessage());
@@ -91,7 +106,7 @@ class MyPackage extends Component
         return Package::query()->purchasableBy(auth()->user())->findOrFail($packageId);
     }
 
-    public function render(PackageLimits $limits): View
+    public function render(PackageLimits $limits, BillingSettings $settings): View
     {
         $user = auth()->user();
 
@@ -104,8 +119,9 @@ class MyPackage extends Component
             'pending' => $user->subscriptions()->pending()->with('package')->latest()->first(),
             'history' => $user->subscriptions()->with('package')->latest()->latest('id')->limit(10)->get(),
             'currency' => config('billing.currency'),
-            'paymentMethods' => config('billing.payment_methods'),
-            'paymentInstructions' => config('billing.payment_instructions'),
+            'accounts' => PaymentAccount::query()->active()->inDisplayOrder()->get(),
+            'paymentInstructions' => $settings->paymentInstructions(),
+            'receiptEmail' => $settings->receiptEmail(),
         ]);
     }
 }

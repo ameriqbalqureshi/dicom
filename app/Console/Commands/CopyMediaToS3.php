@@ -22,14 +22,14 @@ class CopyMediaToS3 extends Command
      *
      * @var string
      */
-    protected $description = 'Copy locally stored DICOM files and signatures to the S3 bucket, leaving the local copies in place';
+    protected $description = 'Copy locally stored DICOM files, signatures and payment receipts to the S3 bucket, leaving the local copies in place';
 
     /**
      * Folders under storage/app/private that are copied to the same paths in the bucket.
      *
      * @var list<string>
      */
-    private const FOLDERS = ['dicom', 'signatures'];
+    private const FOLDERS = ['dicom', 'signatures', 'receipts'];
 
     /**
      * Execute the console command.

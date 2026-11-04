@@ -117,7 +117,7 @@
             <ol class="grid gap-6 sm:grid-cols-3 lg:col-span-2">
                 @foreach ([
                     ['Choose a package', 'Pick a package from the Package page in your account.'],
-                    ['Pay locally', 'Pay by '.Arr::join(array_values($paymentMethods), ', ', ' or ').' and enter the transaction reference.'],
+                    ['Pay locally', 'Pay into one of the accounts below, then send us your receipt from your account, by email or through our receipt form.'],
                     ['Get going', 'We confirm the payment, usually the same working day, and email you when your package starts.'],
                 ] as [$heading, $text])
                     <li class="flex flex-col gap-2">
@@ -129,6 +129,7 @@
             </ol>
             <div class="lg:col-span-3">
                 @include('billing.partials.payment-accounts')
+                <p class="mt-4 text-sm text-slate-400">Already paid? <a href="{{ route('payment-receipt') }}" class="text-sky-400 hover:text-sky-300">Send us your receipt</a>.</p>
             </div>
         </div>
     </section>

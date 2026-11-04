@@ -4,13 +4,16 @@ namespace App\Services\Billing;
 
 use App\Enums\SubscriptionStatus;
 use App\Models\Package;
+use App\Models\PaymentSubmission;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\PackageStarted;
 use App\Notifications\PaymentRejected;
 use App\Notifications\PaymentSubmitted;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /**
@@ -39,19 +42,13 @@ class SubscriptionManager
 
     /**
      * Record a purchase. A free package is activated at once; a paid one waits for an administrator to confirm the
-     * payment made with the given reference.
+     * payment made with the given reference or receipt.
      *
      * @throws InvalidArgumentException
      */
-    public function purchase(User $user, Package $package, ?string $paymentMethod = null, ?string $paymentReference = null, ?string $notes = null): Subscription
+    public function purchase(User $user, Package $package, ?string $paymentMethod = null, ?string $paymentReference = null, ?string $notes = null, ?UploadedFile $receipt = null): Subscription
     {
-        if (! Package::query()->purchasableBy($user)->whereKey($package->id)->exists()) {
-            throw new InvalidArgumentException('This package is not available to you.');
-        }
-
-        if ($user->subscriptions()->pending()->exists()) {
-            throw new InvalidArgumentException('You already have a purchase waiting for confirmation. Cancel it first to choose another package.');
-        }
+        $this->ensureCanBuy($user, $package);
 
         $subscription = $user->subscriptions()->create([
             'package_id' => $package->id,
@@ -59,6 +56,7 @@ class SubscriptionManager
             'amount' => $package->price,
             'payment_method' => $package->isFree() ? null : $paymentMethod,
             'payment_reference' => $package->isFree() ? null : $paymentReference,
+            'receipt_path' => $package->isFree() || $receipt === null ? null : $this->storeReceipt($receipt),
             'notes' => $notes,
         ]);
 
@@ -72,13 +70,62 @@ class SubscriptionManager
     }
 
     /**
-     * Withdraw a purchase that has not been reviewed yet.
+     * Keep a receipt a buyer uploaded on the private receipt disk, returning where it is.
+     */
+    public function storeReceipt(UploadedFile $receipt): string
+    {
+        return $receipt->store('receipts/'.now()->format('Y'), Subscription::RECEIPT_DISK);
+    }
+
+    /**
+     * Turn a receipt sent through the public form into a purchase by the given user, awaiting confirmation like any
+     * other.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function linkSubmission(PaymentSubmission $submission, User $user, Package $package): Subscription
+    {
+        $this->ensureCanBuy($user, $package);
+
+        return DB::transaction(function () use ($submission, $user, $package): Subscription {
+            $subscription = $user->subscriptions()->create([
+                'package_id' => $package->id,
+                'status' => SubscriptionStatus::Pending,
+                'amount' => $package->price,
+                'payment_method' => $submission->payment_method,
+                'payment_reference' => $submission->payment_reference,
+                'receipt_path' => $submission->receipt_path,
+                'notes' => $submission->notes,
+            ]);
+
+            $submission->delete();
+
+            return $subscription;
+        });
+    }
+
+    /**
+     * Delete a receipt sent through the public form that will not become a purchase, such as spam.
+     */
+    public function discardSubmission(PaymentSubmission $submission): void
+    {
+        Storage::disk(Subscription::RECEIPT_DISK)->delete($submission->receipt_path);
+
+        $submission->delete();
+    }
+
+    /**
+     * Withdraw a purchase that has not been reviewed yet. Its receipt is no longer needed.
      */
     public function cancel(Subscription $subscription): void
     {
         $this->ensurePending($subscription);
 
-        $subscription->forceFill(['status' => SubscriptionStatus::Cancelled])->save();
+        if ($subscription->receipt_path !== null) {
+            Storage::disk(Subscription::RECEIPT_DISK)->delete($subscription->receipt_path);
+        }
+
+        $subscription->forceFill(['status' => SubscriptionStatus::Cancelled, 'receipt_path' => null])->save();
     }
 
     /**
@@ -128,6 +175,44 @@ class SubscriptionManager
         $user->notify(new PackageStarted($subscription));
 
         return $subscription;
+    }
+
+    /**
+     * Record a payment an administrator already checked, such as a receipt that arrived by email, and start the package.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function recordPayment(User $user, Package $package, string $paymentMethod, int $amount, User $admin, ?string $paymentReference = null, ?string $notes = null, ?UploadedFile $receipt = null): Subscription
+    {
+        $this->ensureCanBuy($user, $package);
+
+        $subscription = $user->subscriptions()->create([
+            'package_id' => $package->id,
+            'status' => SubscriptionStatus::Pending,
+            'amount' => $amount,
+            'payment_method' => $paymentMethod,
+            'payment_reference' => $paymentReference,
+            'receipt_path' => $receipt === null ? null : $this->storeReceipt($receipt),
+            'notes' => $notes,
+        ]);
+
+        return $this->approve($subscription, $admin);
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    private function ensureCanBuy(User $user, Package $package): void
+    {
+        if (! Package::query()->purchasableBy($user)->whereKey($package->id)->exists()) {
+            throw new InvalidArgumentException('This package is not available to '.($user->is(auth()->user()) ? 'you' : $user->name).'.');
+        }
+
+        if ($user->subscriptions()->pending()->exists()) {
+            throw new InvalidArgumentException($user->is(auth()->user())
+                ? 'You already have a purchase waiting for confirmation. Cancel it first to choose another package.'
+                : "{$user->name} already has a purchase waiting for confirmation. Confirm or reject it first.");
+        }
     }
 
     /**

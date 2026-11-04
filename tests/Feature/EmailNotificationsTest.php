@@ -6,6 +6,7 @@ use App\Livewire\Billing\PaymentIndex;
 use App\Livewire\Studies\StudyReports;
 use App\Livewire\Users\UserIndex;
 use App\Models\Package;
+use App\Models\PaymentAccount;
 use App\Models\Report;
 use App\Models\Study;
 use App\Models\StudyShare;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Notifications\AccountCreated;
 use App\Notifications\PackageEndingSoon;
 use App\Notifications\PackageStarted;
+use App\Notifications\PaymentReceiptSubmitted;
 use App\Notifications\PaymentRejected;
 use App\Notifications\PaymentSubmitted;
 use App\Notifications\PhysicianSignedUp;
@@ -85,7 +87,7 @@ test('administrators are emailed about payments to confirm', function () {
 
     Livewire::actingAs($physician)->test(MyPackage::class)
         ->call('choose', $package->id)
-        ->set('paymentMethod', 'bank_transfer')
+        ->set('paymentAccountId', (string) PaymentAccount::factory()->create()->id)
         ->set('paymentReference', 'TXN-9')
         ->call('purchase');
 
@@ -189,6 +191,7 @@ test('every email renders', function () {
         new PaymentSubmitted($pending),
         new PackageStarted($active),
         new PaymentRejected($pending),
+        new PaymentReceiptSubmitted,
         new PhysicianSignedUp($physician),
         new PhysicianVerified,
         new PackageEndingSoon($active),

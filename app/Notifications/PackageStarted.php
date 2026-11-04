@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Subscription;
+use App\Services\Billing\PaymentReceiptPdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -32,10 +33,19 @@ class PackageStarted extends Notification implements ShouldQueue
     {
         $subscription = $this->subscription;
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->subject("Your {$subscription->package->name} package has started")
             ->line($subscription->amount > 0 ? 'We have confirmed your payment.' : "You have been given the {$subscription->package->name} package.")
             ->line($subscription->ends_at ? "It runs until {$subscription->ends_at->toFormattedDateString()}." : 'It does not expire.')
             ->action('View package', route('package.show'));
+
+        if ($subscription->isPaymentConfirmed()) {
+            $receipt = app(PaymentReceiptPdf::class);
+
+            $mail->line('Your payment receipt is attached.')
+                ->attachData($receipt->render($subscription), $receipt->filename($subscription), ['mime' => 'application/pdf']);
+        }
+
+        return $mail;
     }
 }

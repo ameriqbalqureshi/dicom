@@ -50,9 +50,9 @@
                             <x-nav-link :href="route('packages.index')" :active="request()->routeIs('packages.index')">
                                 Packages
                             </x-nav-link>
-                            <x-nav-link :href="route('payments.index')" :active="request()->routeIs('payments.index')">
+                            <x-nav-link :href="route('payments.index')" :active="request()->routeIs('payments.index', 'payment-accounts.index')">
                                 Payments
-                                @php($pendingPaymentCount = App\Models\Subscription::pending()->count())
+                                @php($pendingPaymentCount = App\Models\Subscription::pending()->count() + App\Models\PaymentSubmission::count())
                                 @if ($pendingPaymentCount > 0)
                                     <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingPaymentCount }}</span>
                                 @endif

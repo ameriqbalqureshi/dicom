@@ -31,13 +31,13 @@ class PaymentSubmitted extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $subscription = $this->subscription;
-        $method = config("billing.payment_methods.{$subscription->payment_method}", $subscription->payment_method);
 
         return (new MailMessage)
             ->subject("Payment to confirm: {$subscription->user->name}")
             ->line("{$subscription->user->name} ({$subscription->user->email}) paid for the {$subscription->package->name} package.")
-            ->line('Amount: '.number_format($subscription->amount).' '.config('billing.currency')." by {$method}")
-            ->line("Reference: {$subscription->payment_reference}")
+            ->line('Amount: '.number_format($subscription->amount).' '.config('billing.currency')." into {$subscription->payment_method}")
+            ->line('Reference: '.($subscription->payment_reference ?? 'none given'))
+            ->line($subscription->receipt_path === null ? 'No receipt was attached.' : 'A receipt is attached on the Payments page.')
             ->action('Review payment', route('payments.index'));
     }
 }

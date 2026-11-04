@@ -6,6 +6,8 @@ use App\Http\Controllers\GuestCommentsPdfController;
 use App\Http\Controllers\GuestInstanceFileController;
 use App\Http\Controllers\GuestReportPdfController;
 use App\Http\Controllers\LogoutController;
+use App\Http\Controllers\PaymentReceiptFileController;
+use App\Http\Controllers\PaymentReceiptPdfController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportPdfController;
 use App\Http\Controllers\VerifyEmailController;
@@ -16,6 +18,7 @@ use App\Livewire\Auth\ResetPassword;
 use App\Livewire\Auth\VerifyEmail;
 use App\Livewire\Billing\MyPackage;
 use App\Livewire\Billing\PackageIndex;
+use App\Livewire\Billing\PaymentAccountIndex;
 use App\Livewire\Billing\PaymentIndex;
 use App\Livewire\Guest\GuestStudy;
 use App\Livewire\Profile\EditProfile;
@@ -36,6 +39,7 @@ Route::view('/about', 'site.about')->name('about');
 Route::view('/contact', 'site.contact')->name('contact');
 Route::view('/privacy', 'site.privacy')->name('privacy');
 Route::view('/terms', 'site.terms')->name('terms');
+Route::view('/payment-receipt', 'site.payment-receipt')->middleware('throttle:30,1')->name('payment-receipt');
 
 Route::livewire('/guest/{token}', GuestStudy::class)
     ->where('token', '[A-Za-z0-9]{'.GuestLinkIssuer::TOKEN_LENGTH.'}')
@@ -89,6 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('shares.senders');
 
     Route::livewire('/package', MyPackage::class)->name('package.show');
+    Route::get('/package/receipts/{subscription}', PaymentReceiptPdfController::class)->name('package.receipt');
 
     Route::livewire('/admin/packages', PackageIndex::class)
         ->middleware('can:manage-billing')
@@ -96,6 +101,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('/admin/payments', PaymentIndex::class)
         ->middleware('can:manage-billing')
         ->name('payments.index');
+    Route::livewire('/admin/payment-accounts', PaymentAccountIndex::class)
+        ->middleware('can:manage-billing')
+        ->name('payment-accounts.index');
+    Route::get('/admin/payments/{subscription}/receipt', [PaymentReceiptFileController::class, 'subscription'])
+        ->middleware('can:manage-billing')
+        ->name('payments.receipt-file');
+    Route::get('/admin/payment-submissions/{paymentSubmission}/receipt', [PaymentReceiptFileController::class, 'submission'])
+        ->middleware('can:manage-billing')
+        ->name('payment-submissions.receipt');
 
     Route::livewire('/users', UserIndex::class)
         ->middleware('can:manage-users')

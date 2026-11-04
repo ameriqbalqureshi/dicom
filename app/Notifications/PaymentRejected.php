@@ -34,9 +34,9 @@ class PaymentRejected extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject('We could not confirm your payment')
-            ->line("We could not confirm your payment for the {$subscription->package->name} package (reference {$subscription->payment_reference}).")
+            ->line("We could not confirm your payment for the {$subscription->package->name} package".($subscription->payment_reference ? " (reference {$subscription->payment_reference})." : '.'))
             ->line("Reason: {$subscription->rejection_reason}")
-            ->line('If you have paid, please submit the purchase again with the correct reference, or reply to this email.')
+            ->line('If you have paid, please submit the purchase again with the correct details, or reply to this email.')
             ->action('View package', route('package.show'));
     }
 }

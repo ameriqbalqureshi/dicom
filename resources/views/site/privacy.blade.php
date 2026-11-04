@@ -17,7 +17,7 @@
             <ul>
                 <li><strong class="text-white">Account details:</strong> your name, email address, password (stored only as a secure hash) and account type. Physicians also give their registration number, qualifications and, optionally, a signature image for reports.</li>
                 <li><strong class="text-white">Medical images and reports:</strong> DICOM studies you upload, which contain patient details and images, and reports written about them.</li>
-                <li><strong class="text-white">Billing details:</strong> the packages you buy and the payment method and transaction reference you give us. We do not collect card numbers.</li>
+                <li><strong class="text-white">Billing details:</strong> the packages you buy, and the payment details and receipts you send us. Only our administrators can see your receipts. We do not collect card numbers.</li>
                 <li><strong class="text-white">Messages:</strong> what you send us through the contact form or by email.</li>
                 <li><strong class="text-white">Technical data:</strong> information needed to run the service securely, such as IP addresses, browser type and session cookies.</li>
             </ul>

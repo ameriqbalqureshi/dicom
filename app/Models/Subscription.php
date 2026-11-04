@@ -32,8 +32,24 @@ class Subscription extends Model
         'amount',
         'payment_method',
         'payment_reference',
+        'receipt_path',
         'notes',
     ];
+
+    /**
+     * The private disk the receipts buyers upload are kept on.
+     */
+    public const RECEIPT_DISK = 'receipts';
+
+    /**
+     * Validation rules for an uploaded receipt: a photo or PDF of up to 5 MB.
+     *
+     * @return list<string>
+     */
+    public static function receiptFileRules(): array
+    {
+        return ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'];
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -62,6 +78,22 @@ class Subscription extends Model
     public function isPending(): bool
     {
         return $this->status === SubscriptionStatus::Pending;
+    }
+
+    /**
+     * Whether an administrator confirmed a payment for this purchase, so it has a receipt. Packages that have since been
+     * replaced or have ended were still paid for.
+     */
+    public function isPaymentConfirmed(): bool
+    {
+        return $this->amount > 0
+            && $this->reviewed_at !== null
+            && in_array($this->status, [SubscriptionStatus::Active, SubscriptionStatus::Replaced], true);
+    }
+
+    public function receiptNumber(): string
+    {
+        return sprintf('R-%06d', $this->id);
     }
 
     /**

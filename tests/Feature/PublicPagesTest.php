@@ -3,6 +3,7 @@
 use App\Enums\Role;
 use App\Livewire\Site\ContactForm;
 use App\Models\Package;
+use App\Models\PaymentAccount;
 use App\Models\User;
 
 test('guests can open every public page', function (string $routeName) {
@@ -10,7 +11,7 @@ test('guests can open every public page', function (string $routeName) {
         ->assertOk()
         ->assertSee(route('register'))
         ->assertSee(route('login'));
-})->with(['home', 'pricing', 'about', 'contact', 'privacy', 'terms']);
+})->with(['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'payment-receipt']);
 
 test('the contact page shows the contact form', function () {
     $this->get(route('contact'))->assertSeeLivewire(ContactForm::class);
@@ -77,11 +78,9 @@ test('pricing tells visitors to get in touch when an account type has no package
         ->assertSee('Packages for patients are being updated.');
 });
 
-test('pricing shows the payment accounts that have details and leaves out the rest', function () {
-    config([
-        'billing.payment_accounts.bank_transfer' => ['Bank' => 'Meezan Bank', 'IBAN' => 'PK36MEZN0001234567890123', 'Branch' => null],
-        'billing.payment_accounts.jazzcash' => ['Account title' => null, 'Mobile number' => ''],
-    ]);
+test('pricing shows the active payment accounts and only the details they have', function () {
+    PaymentAccount::factory()->create(['name' => 'Meezan Bank', 'iban' => 'PK36MEZN0001234567890123', 'branch' => null]);
+    PaymentAccount::factory()->inactive()->mobileWallet()->create(['name' => 'JazzCash']);
 
     $this->get(route('pricing'))
         ->assertSee(['Meezan Bank', 'PK36MEZN0001234567890123'])

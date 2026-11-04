@@ -72,6 +72,16 @@ return [
             'report' => false,
         ],
 
+        /*
+         * The payment receipts buyers upload. They are only ever served to administrators, through the application.
+         */
+        'receipts' => $mediaOnS3 ? [...$s3, 'throw' => true] : [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

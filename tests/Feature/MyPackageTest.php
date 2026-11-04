@@ -4,9 +4,12 @@ use App\Enums\Role;
 use App\Enums\SubscriptionStatus;
 use App\Livewire\Billing\MyPackage;
 use App\Models\Package;
+use App\Models\PaymentAccount;
 use App\Models\Study;
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('users see their current package and what they have used', function () {
@@ -58,15 +61,17 @@ test('packages for another role, withdrawn packages and trials cannot be bought'
 test('buying a paid package records the payment for confirmation', function () {
     $physician = User::factory()->physician()->create();
     $package = Package::factory()->create(['name' => 'Physician Plus', 'price' => 7500]);
+    $account = PaymentAccount::factory()->mobileWallet()->create(['name' => 'JazzCash']);
+    $hiddenAccount = PaymentAccount::factory()->inactive()->create();
 
     Livewire::actingAs($physician)->test(MyPackage::class)
         ->call('choose', $package->id)
         ->call('purchase')
-        ->assertHasErrors(['paymentMethod' => 'required', 'paymentReference' => 'required'])
-        ->set('paymentMethod', 'not-a-method')
+        ->assertHasErrors(['paymentAccountId' => 'required', 'paymentReference' => 'required_without', 'receipt' => 'required_without'])
+        ->set('paymentAccountId', (string) $hiddenAccount->id)
         ->call('purchase')
-        ->assertHasErrors(['paymentMethod' => 'in'])
-        ->set('paymentMethod', 'jazzcash')
+        ->assertHasErrors(['paymentAccountId' => 'exists'])
+        ->set('paymentAccountId', (string) $account->id)
         ->set('paymentReference', ' TXN-42 ')
         ->call('purchase')
         ->assertHasNoErrors()
@@ -77,9 +82,59 @@ test('buying a paid package records the payment for confirmation', function () {
 
     expect($purchase->package_id)->toBe($package->id)
         ->and($purchase->amount)->toBe(7500)
-        ->and($purchase->payment_method)->toBe('jazzcash')
+        ->and($purchase->payment_method)->toBe('JazzCash')
         ->and($purchase->payment_reference)->toBe('TXN-42')
+        ->and($purchase->receipt_path)->toBeNull()
         ->and($physician->subscriptions()->current()->count())->toBe(1);
+});
+
+test('buyers can attach a receipt instead of entering a reference', function () {
+    Storage::fake(Subscription::RECEIPT_DISK);
+    $physician = User::factory()->physician()->create();
+
+    Livewire::actingAs($physician)->test(MyPackage::class)
+        ->call('choose', Package::factory()->create()->id)
+        ->set('paymentAccountId', (string) PaymentAccount::factory()->create()->id)
+        ->set('receipt', UploadedFile::fake()->image('receipt.jpg'))
+        ->call('purchase')
+        ->assertHasNoErrors()
+        ->assertSee('receipt attached');
+
+    $purchase = $physician->subscriptions()->pending()->sole();
+
+    expect($purchase->payment_reference)->toBeNull();
+    Storage::disk(Subscription::RECEIPT_DISK)->assertExists($purchase->receipt_path);
+});
+
+test('receipts must be a photo or PDF of up to 5 MB', function (UploadedFile $file) {
+    Storage::fake(Subscription::RECEIPT_DISK);
+
+    Livewire::actingAs(User::factory()->physician()->create())->test(MyPackage::class)
+        ->call('choose', Package::factory()->create()->id)
+        ->set('paymentAccountId', (string) PaymentAccount::factory()->create()->id)
+        ->set('receipt', $file)
+        ->call('purchase')
+        ->assertHasErrors('receipt');
+})->with([
+    'not a photo or PDF' => fn () => UploadedFile::fake()->createWithContent('page.html', '<script>alert(1)</script>'),
+    'too large' => fn () => UploadedFile::fake()->create('receipt.pdf', 5121, 'application/pdf'),
+]);
+
+test('cancelling a purchase deletes its receipt', function () {
+    $disk = Storage::fake(Subscription::RECEIPT_DISK);
+    $disk->put('receipts/receipt.jpg', 'image');
+    $pending = Subscription::factory()->pending()->for(User::factory()->physician(), 'user')->create(['receipt_path' => 'receipts/receipt.jpg']);
+
+    Livewire::actingAs($pending->user)->test(MyPackage::class)->call('cancelPending', $pending->id);
+
+    $disk->assertMissing('receipts/receipt.jpg');
+    expect($pending->fresh()->receipt_path)->toBeNull();
+});
+
+test('the package page shows the user ID to quote when sending a receipt', function () {
+    $physician = User::factory()->physician()->create();
+
+    $this->actingAs($physician)->get(route('package.show'))->assertSee("Your user ID: <span class=\"select-all font-mono text-slate-200\">{$physician->id}</span>", false);
 });
 
 test('only one purchase can wait for confirmation at a time, and it can be cancelled', function () {
@@ -88,7 +143,7 @@ test('only one purchase can wait for confirmation at a time, and it can be cance
 
     $component = Livewire::actingAs($pending->user)->test(MyPackage::class)
         ->call('choose', $package->id)
-        ->set('paymentMethod', 'bank_transfer')
+        ->set('paymentAccountId', (string) PaymentAccount::factory()->create()->id)
         ->set('paymentReference', 'TXN-2')
         ->call('purchase')
         ->assertHasErrors('purchase');
