@@ -79,7 +79,7 @@
 
         <div x-ref="viewport" tabindex="0"
             @wheel.prevent="scroll($event.deltaY)"
-            @pointerdown="startAdjust($event)" @pointermove="adjust($event); trackPointer($event)" @pointerleave="leaveViewport()" @pointerup="stopAdjust($event)" @pointercancel="stopAdjust($event)"
+            @pointerdown="trackPointer($event); startAdjust($event)" @pointermove="adjust($event); trackPointer($event)" @pointerleave="leaveViewport($event)" @pointerup="stopAdjust($event)" @pointercancel="stopAdjust($event)"
             @dblclick="toggleFullscreen()"
             :class="isFullscreen ? 'min-h-0 flex-1' : 'h-[70vh]'"
             class="relative flex cursor-crosshair touch-none select-none items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-black focus:border-sky-700 focus:outline-none">
@@ -114,6 +114,9 @@
             Drag: window/level · Scroll or ←/→: change image · Space: play/pause · Home/End: first/last ·
             Page Up/Down: series · F or double-click: full screen · I: invert · R: reset ·
             M: magnifier · +/−: magnification · C: caliper (drag to measure, drag an end to adjust, Delete: remove)
+        </p>
+        <p x-show="magnifier" class="text-xs text-slate-500">
+            On a touch screen, touch or drag on the image to place the magnifier. It stays when you lift your finger; press Magnify to close it.
         </p>
     </div>
 </div>

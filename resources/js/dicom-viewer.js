@@ -22,6 +22,9 @@ const MIN_FRAME_RATE = 1;
 const MAX_FRAME_RATE = 60;
 
 const LENS_SIZE = 220;
+const TOUCH_LENS_GAP = 48;
+const LENS_CROSSHAIR_GAP = 6;
+const LENS_CROSSHAIR_LENGTH = 12;
 const MAGNIFICATIONS = [2, 3, 4, 6, 8];
 const DEFAULT_MAGNIFICATION = 3;
 
@@ -31,6 +34,37 @@ const SELECTED_CALIPER_COLOR = '#38bdf8';
 const CALIPER_HANDLE_RADIUS = 8;
 const CALIPER_TICK_LENGTH = 6;
 const MIN_CALIPER_LENGTH = 3;
+
+/**
+ * Where to put the top left of the lens in a viewport, for a pointer at the given position within it. A mouse looks
+ * through the lens; a finger would hide it, so the lens goes above the finger, or else beside or below it.
+ *
+ * @returns {{left: number, top: number}}
+ */
+export function lensPosition({ x, y, isTouch }, viewportWidth, viewportHeight) {
+    if (!isTouch) {
+        return { left: x - LENS_SIZE / 2, top: y - LENS_SIZE / 2 };
+    }
+
+    const reach = LENS_SIZE + TOUCH_LENS_GAP;
+    const keepInside = (position, viewportSize) => Math.max(0, Math.min(position, viewportSize - LENS_SIZE));
+    const centredLeft = keepInside(x - LENS_SIZE / 2, viewportWidth);
+    const centredTop = keepInside(y - LENS_SIZE / 2, viewportHeight);
+
+    if (y >= LENS_SIZE + TOUCH_LENS_GAP / 2) {
+        return { left: centredLeft, top: Math.max(0, y - reach) };
+    }
+
+    if (x + reach <= viewportWidth) {
+        return { left: x + TOUCH_LENS_GAP, top: centredTop };
+    }
+
+    if (x >= reach) {
+        return { left: x - reach, top: centredTop };
+    }
+
+    return { left: centredLeft, top: keepInside(y + TOUCH_LENS_GAP, viewportHeight) };
+}
 
 /**
  * Parse the header and element offsets of a DICOM file once, so its frames can be decoded repeatedly.
@@ -543,7 +577,7 @@ export default function dicomViewer(series) {
                 return;
             }
 
-            if (image.isColor) {
+            if (image.isColor || (this.magnifier && event.pointerType === 'touch')) {
                 return;
             }
 
@@ -851,6 +885,11 @@ export default function dicomViewer(series) {
 
         toggleMagnifier() {
             this.magnifier = !this.magnifier;
+
+            if (!this.magnifier && pointer?.isTouch) {
+                pointer = null;
+            }
+
             this.updateLens();
         },
 
@@ -866,18 +905,35 @@ export default function dicomViewer(series) {
             this.setMagnification(MAGNIFICATIONS[Math.min(Math.max(index, 0), MAGNIFICATIONS.length - 1)]);
         },
 
+        /**
+         * Remember where the pointer is within the viewport, so a lens left in place stays put if the page scrolls.
+         */
         trackPointer(event) {
-            pointer = { x: event.clientX, y: event.clientY };
+            if (!event.isPrimary) {
+                return;
+            }
+
+            const bounds = this.$refs.viewport.getBoundingClientRect();
+            pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top, isTouch: event.pointerType === 'touch' };
             this.updateLens();
         },
 
-        leaveViewport() {
+        /**
+         * Hide the lens when the mouse leaves. A finger leaves whenever it lifts, and the lens then stays where it is, so
+         * the image can be seen without a finger in the way.
+         */
+        leaveViewport(event) {
+            if (event.pointerType === 'touch') {
+                return;
+            }
+
             pointer = null;
             this.updateLens();
         },
 
         /**
-         * Position the lens under the pointer and draw the magnified region of the rendered image into it.
+         * Position the lens for the pointer and draw the magnified region of the rendered image into it. A lens placed by
+         * touch is away from the point it magnifies, so a crosshair marks that point.
          */
         updateLens() {
             if (!this.magnifier || !pointer || !image) {
@@ -887,7 +943,8 @@ export default function dicomViewer(series) {
             }
 
             const canvas = this.$refs.canvas;
-            const { x: imageX, y: imageY, scale } = this.imagePointAt(pointer.x, pointer.y);
+            const viewportBounds = this.$refs.viewport.getBoundingClientRect();
+            const { x: imageX, y: imageY, scale } = this.imagePointAt(viewportBounds.left + pointer.x, viewportBounds.top + pointer.y);
 
             if (imageX < 0 || imageY < 0 || imageX >= image.columns || imageY >= image.rows) {
                 this.lensVisible = false;
@@ -896,8 +953,8 @@ export default function dicomViewer(series) {
             }
 
             const lens = this.$refs.lens;
-            const viewportBounds = this.$refs.viewport.getBoundingClientRect();
-            const lensPixels = Math.round(LENS_SIZE * (window.devicePixelRatio || 1));
+            const pixelRatio = window.devicePixelRatio || 1;
+            const lensPixels = Math.round(LENS_SIZE * pixelRatio);
 
             if (lens.width !== lensPixels) {
                 lens.width = lensPixels;
@@ -906,7 +963,8 @@ export default function dicomViewer(series) {
                 lens.style.height = `${LENS_SIZE}px`;
             }
 
-            lens.style.transform = `translate(${pointer.x - viewportBounds.left - LENS_SIZE / 2}px, ${pointer.y - viewportBounds.top - LENS_SIZE / 2}px)`;
+            const { left, top } = lensPosition(pointer, viewportBounds.width, viewportBounds.height);
+            lens.style.transform = `translate(${left}px, ${top}px)`;
 
             const sourceSize = LENS_SIZE / (scale * this.magnification);
             const context = lens.getContext('2d');
@@ -914,6 +972,23 @@ export default function dicomViewer(series) {
             context.fillRect(0, 0, lensPixels, lensPixels);
             context.imageSmoothingEnabled = false;
             context.drawImage(canvas, imageX - sourceSize / 2, imageY - sourceSize / 2, sourceSize, sourceSize, 0, 0, lensPixels, lensPixels);
+
+            if (pointer.isTouch) {
+                const centre = lensPixels / 2;
+                const gap = LENS_CROSSHAIR_GAP * pixelRatio;
+                const end = gap + LENS_CROSSHAIR_LENGTH * pixelRatio;
+
+                context.strokeStyle = SELECTED_CALIPER_COLOR;
+                context.lineWidth = pixelRatio;
+                context.beginPath();
+
+                for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                    context.moveTo(centre + x * gap, centre + y * gap);
+                    context.lineTo(centre + x * end, centre + y * end);
+                }
+
+                context.stroke();
+            }
 
             this.lensVisible = true;
         },
