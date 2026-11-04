@@ -60,7 +60,7 @@
             <fieldset class="flex flex-col gap-2">
                 <legend class="text-sm text-slate-300">Limits <span class="text-slate-500">(blank: unlimited, 0: not included)</span></legend>
                 <div class="grid gap-4 sm:grid-cols-3">
-                    @foreach (['maxUploads' => 'Studies stored', 'maxStorageMb' => 'Storage (MB)', 'maxReports' => 'Reports signed', 'maxShares' => 'Shares', 'maxGuestLinks' => 'Guest links'] as $field => $label)
+                    @foreach (['maxUploads' => 'Studies stored', 'maxPatientRecords' => 'Patient records (physicians)', 'maxStorageMb' => 'Storage (MB)', 'maxReports' => 'Reports signed', 'maxShares' => 'Shares', 'maxGuestLinks' => 'Guest links'] as $field => $label)
                         <label wire:key="field-{{ $field }}" class="flex flex-col gap-1 text-sm">
                             <span class="text-slate-400">{{ $label }}</span>
                             <input wire:model="{{ $field }}" type="number" min="0" class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2">

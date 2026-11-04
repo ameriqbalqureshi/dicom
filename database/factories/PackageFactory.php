@@ -25,6 +25,7 @@ class PackageFactory extends Factory
             'price' => 5000,
             'duration_days' => 30,
             'max_uploads' => null,
+            'max_patient_records' => null,
             'max_storage_mb' => null,
             'max_reports' => null,
             'max_shares' => null,

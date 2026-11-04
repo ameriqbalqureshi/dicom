@@ -61,7 +61,7 @@
                         </div>
 
                         <ul class="flex flex-col gap-3 text-sm">
-                            @foreach (App\Enums\Quota::cases() as $quota)
+                            @foreach (App\Enums\Quota::forRole($package->role) as $quota)
                                 @php($limit = $package->{$quota->limitColumn()})
                                 <li @class(['flex gap-3', 'text-slate-500' => $limit === 0, 'text-slate-300' => $limit !== 0])>
                                     @if ($limit === 0)

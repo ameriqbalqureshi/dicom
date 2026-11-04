@@ -65,6 +65,7 @@ class Subscription extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'max_uploads' => 'integer',
+            'max_patient_records' => 'integer',
             'max_storage_mb' => 'integer',
             'max_reports' => 'integer',
             'max_shares' => 'integer',
@@ -127,15 +128,16 @@ class Subscription extends Model
     }
 
     /**
-     * How much of the quota is used: the studies the user keeps now, or what was done during this subscription.
+     * How much of the quota is used: the studies or patient records the user keeps now, or what was done during this
+     * subscription.
      */
     public function used(Quota $quota): int
     {
-        if ($quota->countsStudiesKept()) {
-            return $this->user->uploadedStudies()->count();
-        }
-
-        return $this->{$quota->usageColumn()};
+        return match ($quota) {
+            Quota::Uploads => $this->user->uploadedStudies()->count(),
+            Quota::PatientRecords => $this->user->patientRecords()->count(),
+            default => $this->{$quota->usageColumn()},
+        };
     }
 
     /**

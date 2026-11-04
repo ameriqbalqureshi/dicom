@@ -27,6 +27,12 @@
                             </x-nav-link>
                         @endcan
 
+                        @can('viewAny', App\Models\PatientRecord::class)
+                            <x-nav-link :href="route('patient-records.index')" :active="request()->routeIs('patient-records.*')">
+                                Patients
+                            </x-nav-link>
+                        @endcan
+
                         @if (auth()->user()->isPhysician())
                             <x-nav-link :href="route('shares.pending')" :active="request()->routeIs('shares.pending')">
                                 Requests
@@ -50,12 +56,15 @@
                             <x-nav-link :href="route('packages.index')" :active="request()->routeIs('packages.index')">
                                 Packages
                             </x-nav-link>
-                            <x-nav-link :href="route('payments.index')" :active="request()->routeIs('payments.index', 'payment-accounts.index')">
+                            <x-nav-link :href="route('payments.index')" :active="request()->routeIs('payments.index')">
                                 Payments
                                 @php($pendingPaymentCount = App\Models\Subscription::pending()->count() + App\Models\PaymentSubmission::count())
                                 @if ($pendingPaymentCount > 0)
                                     <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingPaymentCount }}</span>
                                 @endif
+                            </x-nav-link>
+                            <x-nav-link :href="route('payment-accounts.index')" :active="request()->routeIs('payment-accounts.index')">
+                                Payment accounts
                             </x-nav-link>
                         @endcan
                     </div>

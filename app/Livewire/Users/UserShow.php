@@ -49,6 +49,7 @@ class UserShow extends Component
                 'Reports written' => number_format($user->reports()->count()),
                 'Shares made' => number_format($user->sharesMade()->count()),
                 'Studies shared with them' => number_format($user->receivedShares()->count()),
+                'Patient records' => number_format($user->patientRecords()->count()),
             ],
             'subscriptions' => $user->subscriptions()->with('package')->latest()->get(),
             'packages' => Package::query()->where('role', $user->role)->orderByDesc('is_trial')->orderBy('price')->get(),

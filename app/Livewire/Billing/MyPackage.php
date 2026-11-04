@@ -112,7 +112,7 @@ class MyPackage extends Component
 
         return view('livewire.billing.my-package', [
             'current' => $limits->current($user),
-            'quotas' => Quota::cases(),
+            'quotas' => Quota::forRole($user->role),
             'storageUsedMb' => round($limits->storageUsed($user) / 1024 / 1024, 1),
             'packages' => Package::query()->purchasableBy($user)->get(),
             'selectedPackage' => $this->selectedPackageId ? Package::find($this->selectedPackageId) : null,

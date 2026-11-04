@@ -25,8 +25,10 @@ class QuotaExceededException extends Exception
             return new self("Your {$subscription->package->name} package does not include ".Str::lower($quota->label()).'. Upgrade on the Package page.');
         }
 
-        if ($quota->countsStudiesKept()) {
-            return new self("You already have {$limit} ".Str::plural('study', $limit).", the most your {$subscription->package->name} package allows. Delete studies you no longer need or upgrade on the Package page.");
+        if ($quota->countsItemsKept()) {
+            $itemName = $quota->keptItemName();
+
+            return new self("You already have {$limit} ".Str::plural($itemName, $limit).", the most your {$subscription->package->name} package allows. Delete ".Str::plural($itemName).' you no longer need or upgrade on the Package page.');
         }
 
         return new self("You have used all {$limit} ".Str::lower($quota->label())." in your {$subscription->package->name} package. Upgrade on the Package page.");

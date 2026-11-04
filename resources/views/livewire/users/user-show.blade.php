@@ -12,7 +12,7 @@
         @unless ($user->is(auth()->user()))
             @php($studyCount = $user->uploadedStudies()->count())
             <button type="button" wire:click="deleteUser({{ $user->id }})"
-                wire:confirm="Delete {{ $user->name }}{{ $studyCount > 0 ? ' and the '.$studyCount.' '.Str::plural('study', $studyCount).' they uploaded, with their images and reports' : '' }}? This cannot be undone."
+                wire:confirm="Delete {{ $user->name }}{{ $studyCount > 0 ? ' and the '.$studyCount.' '.Str::plural('study', $studyCount).' they uploaded, with their images and reports' : '' }}{{ $user->patientRecords()->exists() ? ', and their patient records' : '' }}? This cannot be undone."
                 class="rounded-md border border-red-800 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950">
                 Delete user{{ $studyCount > 0 ? ' and '.$studyCount.' '.Str::plural('study', $studyCount) : '' }}
             </button>

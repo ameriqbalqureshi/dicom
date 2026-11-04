@@ -142,7 +142,7 @@
                             <a href="{{ route('users.show', $user) }}" class="text-sky-400 hover:text-sky-300">Manage</a>
                             @unless ($user->is(auth()->user()))
                                 <button type="button" wire:click="deleteUser({{ $user->id }})"
-                                    wire:confirm="Delete {{ $user->name }}{{ $user->uploaded_studies_count > 0 ? ' and the '.$user->uploaded_studies_count.' '.Str::plural('study', $user->uploaded_studies_count).' they uploaded' : '' }}? This cannot be undone."
+                                    wire:confirm="Delete {{ $user->name }}{{ $user->uploaded_studies_count > 0 ? ' and the '.$user->uploaded_studies_count.' '.Str::plural('study', $user->uploaded_studies_count).' they uploaded' : '' }}{{ $user->isPhysician() ? ', and any patient records they keep' : '' }}? This cannot be undone."
                                     class="ml-3 text-red-400 hover:text-red-300">
                                     Delete
                                 </button>

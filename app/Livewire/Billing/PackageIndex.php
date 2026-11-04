@@ -37,6 +37,8 @@ class PackageIndex extends Component
 
     public string $maxUploads = '';
 
+    public string $maxPatientRecords = '';
+
     public string $maxStorageMb = '';
 
     public string $maxReports = '';
@@ -57,6 +59,7 @@ class PackageIndex extends Component
     private const LIMIT_FIELDS = [
         'durationDays' => 'duration_days',
         'maxUploads' => 'max_uploads',
+        'maxPatientRecords' => 'max_patient_records',
         'maxStorageMb' => 'max_storage_mb',
         'maxReports' => 'max_reports',
         'maxShares' => 'max_shares',
@@ -113,6 +116,7 @@ class PackageIndex extends Component
             'price' => ['required', 'integer', 'min:0', 'max:100000000'],
             'durationDays' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'maxUploads' => ['nullable', 'integer', 'min:0'],
+            'maxPatientRecords' => ['nullable', 'integer', 'min:0'],
             'maxStorageMb' => ['nullable', 'integer', 'min:0'],
             'maxReports' => ['nullable', 'integer', 'min:0'],
             'maxShares' => ['nullable', 'integer', 'min:0'],

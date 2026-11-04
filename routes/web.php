@@ -6,6 +6,7 @@ use App\Http\Controllers\GuestCommentsPdfController;
 use App\Http\Controllers\GuestInstanceFileController;
 use App\Http\Controllers\GuestReportPdfController;
 use App\Http\Controllers\LogoutController;
+use App\Http\Controllers\PatientRecordPdfController;
 use App\Http\Controllers\PaymentReceiptFileController;
 use App\Http\Controllers\PaymentReceiptPdfController;
 use App\Http\Controllers\PricingController;
@@ -21,6 +22,9 @@ use App\Livewire\Billing\PackageIndex;
 use App\Livewire\Billing\PaymentAccountIndex;
 use App\Livewire\Billing\PaymentIndex;
 use App\Livewire\Guest\GuestStudy;
+use App\Livewire\PatientRecords\PatientRecordForm;
+use App\Livewire\PatientRecords\PatientRecordIndex;
+use App\Livewire\PatientRecords\PatientRecordShow;
 use App\Livewire\Profile\EditProfile;
 use App\Livewire\Studies\PendingShares;
 use App\Livewire\Studies\ShareSenders;
@@ -29,6 +33,7 @@ use App\Livewire\Studies\StudyShow;
 use App\Livewire\Studies\UploadStudies;
 use App\Livewire\Users\UserIndex;
 use App\Livewire\Users\UserShow;
+use App\Models\PatientRecord;
 use App\Models\Study;
 use App\Services\GuestLinkIssuer;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +91,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reports/{report}/pdf', ReportPdfController::class)->name('reports.pdf');
 
     Route::get('/studies/{study}/comments/pdf', CommentsPdfController::class)->name('studies.comments.pdf');
+
+    Route::livewire('/patients', PatientRecordIndex::class)
+        ->middleware('can:viewAny,'.PatientRecord::class)
+        ->name('patient-records.index');
+    Route::livewire('/patients/create', PatientRecordForm::class)
+        ->middleware('can:create,'.PatientRecord::class)
+        ->name('patient-records.create');
+    Route::livewire('/patients/{patientRecord}', PatientRecordShow::class)->name('patient-records.show');
+    Route::livewire('/patients/{patientRecord}/edit', PatientRecordForm::class)->name('patient-records.edit');
+    Route::get('/patients/{patientRecord}/pdf', PatientRecordPdfController::class)->name('patient-records.pdf');
 
     Route::livewire('/requests', PendingShares::class)->name('shares.pending');
     Route::livewire('/senders', ShareSenders::class)

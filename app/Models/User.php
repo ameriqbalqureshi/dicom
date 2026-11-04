@@ -212,6 +212,16 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * The physician's own records of their patients.
+     *
+     * @return HasMany<PatientRecord, $this>
+     */
+    public function patientRecords(): HasMany
+    {
+        return $this->hasMany(PatientRecord::class, 'owner_id');
+    }
+
+    /**
      * @return HasMany<Report, $this>
      */
     public function reports(): HasMany

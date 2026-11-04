@@ -2,7 +2,7 @@
     <x-site.page-header eyebrow="Legal" title="Privacy policy" />
 
     <article class="mx-auto flex max-w-3xl flex-col gap-10 px-4 py-20 text-slate-300 sm:px-6 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-white [&_li]:ml-5 [&_li]:list-disc [&_section]:flex [&_section]:flex-col [&_section]:gap-3 [&_ul]:flex [&_ul]:flex-col [&_ul]:gap-1.5">
-        <p class="text-sm text-slate-500">Last updated {{ \Illuminate\Support\Carbon::parse('2026-11-01')->toFormattedDateString() }}</p>
+        <p class="text-sm text-slate-500">Last updated {{ \Illuminate\Support\Carbon::parse('2026-11-04')->toFormattedDateString() }}</p>
 
         <section>
             <p>
@@ -17,6 +17,7 @@
             <ul>
                 <li><strong class="text-white">Account details:</strong> your name, email address, password (stored only as a secure hash) and account type. Physicians also give their registration number, qualifications and, optionally, a signature image for reports.</li>
                 <li><strong class="text-white">Medical images and reports:</strong> DICOM studies you upload, which contain patient details and images, and reports written about them.</li>
+                <li><strong class="text-white">Patient records:</strong> the clinical details and notes physicians keep about their patients.</li>
                 <li><strong class="text-white">Billing details:</strong> the packages you buy, and the payment details and receipts you send us. Only our administrators can see your receipts. We do not collect card numbers.</li>
                 <li><strong class="text-white">Messages:</strong> what you send us through the contact form or by email.</li>
                 <li><strong class="text-white">Technical data:</strong> information needed to run the service securely, such as IP addresses, browser type and session cookies.</li>
@@ -47,8 +48,19 @@
         </section>
 
         <section>
+            <h2>Who can see patient records</h2>
+            <p>
+                A patient record can only be opened by the physician who created it. Our administrators cannot open it in the service;
+                they only see how many records a physician keeps. Clinical details and notes are encrypted in our database. A study
+                attached to a record stays subject to the rules for studies above. The physician is responsible for any PDF they print
+                or hand over.
+            </p>
+        </section>
+
+        <section>
             <h2>How long we keep data</h2>
             <ul>
+                <li>Patient records are kept until the physician deletes them or their account is closed, which deletes them permanently.</li>
                 <li>Studies uploaded by patients are deleted automatically after a short retention period.</li>
                 <li>Other studies are kept until the person who uploaded them deletes them or closes their account.</li>
                 <li>When a shared study is deleted or expires, physicians who can open it have {{ config('studies.handover_days') }} days to keep it; it is deleted if nobody does.</li>
