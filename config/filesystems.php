@@ -15,6 +15,8 @@ $s3 = [
     // Give up on a stalled connection and retry, well within PHP's time limit, rather than hang until PHP kills the request.
     'http' => ['connect_timeout' => 5, 'timeout' => 15],
     'retries' => 2,
+    // Read files as they arrive. Laravel otherwise downloads the whole file first, even to look at its first few bytes.
+    'stream_reads' => true,
 ];
 
 $mediaOnS3 = env('MEDIA_DISK', 'local') === 's3';

@@ -1,5 +1,6 @@
 import dicomParser from 'dicom-parser';
 import { Decoder as JpegLosslessDecoder } from 'jpeg-lossless-decoder-js';
+import { readArchiveEntry } from './dicom-zip';
 
 const IMPLICIT_VR_LITTLE_ENDIAN = '1.2.840.10008.1.2';
 const EXPLICIT_VR_LITTLE_ENDIAN = '1.2.840.10008.1.2.1';
@@ -294,17 +295,22 @@ export default function dicomViewer(series) {
     let selectedMeasurement = null;
     let caliperDrag = null;
 
-    function fetchFile(url) {
-        if (!fileCache.has(url)) {
-            const request = fetch(url, { credentials: 'same-origin' })
-                .then((response) => {
-                    if (!response.ok) {
-                        throw new Error(`The image could not be loaded (HTTP ${response.status}).`);
-                    }
+    async function downloadFile(url) {
+        const response = await fetch(url, { credentials: 'same-origin' });
 
-                    return response.arrayBuffer();
-                })
-                .then((buffer) => parseFile(new Uint8Array(buffer)));
+        if (!response.ok) {
+            throw new Error(`The image could not be loaded (HTTP ${response.status}).`);
+        }
+
+        return new Uint8Array(await response.arrayBuffer());
+    }
+
+    /**
+     * Load an image's file, which for an image stored in a zip means just its part of the zip.
+     */
+    function fetchFile(url, archiveEntry) {
+        if (!fileCache.has(url)) {
+            const request = (archiveEntry ? readArchiveEntry(url, archiveEntry) : downloadFile(url)).then(parseFile);
 
             request.catch(() => fileCache.delete(url));
             fileCache.set(url, request);
@@ -531,7 +537,7 @@ export default function dicomViewer(series) {
             }
 
             try {
-                const decoded = decodeFrame(await fetchFile(slice.url), slice.frame);
+                const decoded = decodeFrame(await fetchFile(slice.url, this.currentSeries.archiveEntries?.[slice.url]), slice.frame);
 
                 if (token !== loadToken) {
                     return;
@@ -568,7 +574,7 @@ export default function dicomViewer(series) {
         prefetch() {
             this.slices
                 .slice(this.sliceIndex + 1, this.sliceIndex + 1 + PREFETCH_COUNT)
-                .forEach((slice) => fetchFile(slice.url).catch(() => {}));
+                .forEach((slice) => fetchFile(slice.url, this.currentSeries.archiveEntries?.[slice.url]).catch(() => {}));
         },
 
         resetView() {

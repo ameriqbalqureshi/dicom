@@ -19,7 +19,7 @@ class GuestInstanceFileController extends Controller
 
         abort_unless($link?->isUsable() && $link->isUnlocked() && $instance->series->study_id === $link->study_id, 404);
 
-        return $storage->fileResponse($instance->file_path, "{$instance->sop_instance_uid}.dcm", [
+        return $storage->instanceResponse($instance, [
             'Cache-Control' => 'private, no-store',
             'Referrer-Policy' => 'no-referrer',
         ]);

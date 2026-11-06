@@ -3,10 +3,12 @@
 namespace App\Livewire\Studies;
 
 use App\Enums\Role;
+use App\Models\DicomArchive;
 use App\Models\DicomInstance;
 use App\Models\Study;
 use App\Services\Billing\PackageLimits;
 use App\Services\Billing\QuotaExceededException;
+use App\Services\Dicom\DicomArchives;
 use App\Services\Dicom\DicomImporter;
 use App\Services\Dicom\DicomStorage;
 use App\Services\Dicom\DuplicateDicomInstanceException;
@@ -33,6 +35,12 @@ class UploadStudies extends Component
      * Failures may use twice this many rows, so they are still shown after a long run of successes.
      */
     public const MAX_LISTED_RESULTS = 100;
+
+    /**
+     * How many images of a zip are imported per request, which keeps each request within Livewire's size limit and PHP's
+     * time limit.
+     */
+    public const ARCHIVE_BATCH_SIZE = 250;
 
     /** @var array<int, TemporaryUploadedFile> */
     public array $files = [];
@@ -154,6 +162,83 @@ class UploadStudies extends Component
         }
 
         $this->recordResult($this->importWith(Str::limit($name, 255), fn () => $importer->importUploaded($path, $user)));
+    }
+
+    /**
+     * Register a zip the browser has read, and hand it the place to upload the zip to. Returns null, and records why,
+     * when the zip cannot be accepted, so nobody waits for an upload that was bound to fail.
+     *
+     * @param  list<string>  $studyInstanceUids  The studies the browser found in the zip.
+     * @return array{archive: int, url: string, headers: array<string, string>, chunkSize: int|null}|null
+     */
+    public function prepareArchive(string $name, int $size, array $studyInstanceUids, DicomArchives $archives, DicomImporter $importer): ?array
+    {
+        $this->authorize('create', Study::class);
+
+        try {
+            $importer->ensureCanImportStudies(auth()->user(), array_filter($studyInstanceUids, is_string(...)));
+            $archive = $archives->prepare(auth()->user(), Str::limit($name, 240), $size);
+        } catch (InvalidDicomFileException|StudyLimitReachedException|QuotaExceededException $exception) {
+            $this->addFailure($name, $exception->getMessage());
+
+            return null;
+        }
+
+        return ['archive' => $archive->id, ...$archives->uploadTarget($archive)];
+    }
+
+    /**
+     * Check a zip has arrived in storage. Its images are imported after this.
+     */
+    public function confirmArchive(int $archiveId, DicomArchives $archives): bool
+    {
+        $archive = $this->ownArchive($archiveId);
+
+        try {
+            $archives->confirmUpload($archive, auth()->user());
+
+            return true;
+        } catch (InvalidDicomFileException|QuotaExceededException $exception) {
+            $this->addFailure($archive->original_name, $exception->getMessage());
+        } catch (FilesystemException $exception) {
+            report($exception);
+            $this->addFailure($archive->original_name, 'Storage did not respond. Please try this zip again.');
+        }
+
+        return false;
+    }
+
+    /**
+     * Import a batch of the images the browser found in a zip that has arrived in storage.
+     *
+     * @param  list<array<array-key, mixed>>  $entries  {name: string, attributes: array, offset: int, length: int, size: int, method: int}
+     */
+    public function importArchiveEntries(int $archiveId, array $entries, DicomImporter $importer): void
+    {
+        $archive = $this->ownArchive($archiveId);
+
+        abort_if($archive->uploaded_at === null || count($entries) > self::ARCHIVE_BATCH_SIZE, 422);
+
+        foreach ($entries as $entry) {
+            $name = is_string($entry['name'] ?? null) ? Str::limit($entry['name'], 255) : $archive->original_name;
+
+            $this->recordResult($this->importWith($name, fn () => $importer->importArchiveEntry($archive, $entry, auth()->user())));
+        }
+    }
+
+    /**
+     * Finish with a zip, whether or not its upload succeeded.
+     */
+    public function finishArchive(int $archiveId, DicomArchives $archives): void
+    {
+        $archives->finish($this->ownArchive($archiveId));
+    }
+
+    private function ownArchive(int $archiveId): DicomArchive
+    {
+        $this->authorize('create', Study::class);
+
+        return DicomArchive::where('uploaded_by', auth()->id())->findOrFail($archiveId);
     }
 
     /**

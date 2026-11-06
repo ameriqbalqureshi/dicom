@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Dicom\DicomArchives;
 use App\Services\Dicom\DicomStorage;
 use Illuminate\Console\Command;
 
@@ -29,7 +30,7 @@ class PruneIncomingUploads extends Command
     /**
      * Execute the console command.
      */
-    public function handle(DicomStorage $storage): int
+    public function handle(DicomStorage $storage, DicomArchives $archives): int
     {
         $disk = $storage->disk();
         $cutoff = now()->subHours(self::MAX_AGE_HOURS)->getTimestamp();
@@ -40,8 +41,9 @@ class PruneIncomingUploads extends Command
             ->all();
 
         $storage->delete($abandoned);
+        $deleted = count($abandoned) + $archives->pruneAbandoned();
 
-        $this->info('Deleted '.count($abandoned).' abandoned '.str('upload')->plural(count($abandoned)).'.');
+        $this->info('Deleted '.$deleted.' abandoned '.str('upload')->plural($deleted).'.');
 
         return self::SUCCESS;
     }

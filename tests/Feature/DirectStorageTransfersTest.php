@@ -147,6 +147,10 @@ test('nobody can import another person\'s upload or any other file on the disk',
     'a path escaping the folder' => ['incoming/{other}/../../users/{other}/x.dcm'],
 ]);
 
+test('S3 reads are streamed, so checking the start of an upload does not download all of it', function () {
+    expect(config('filesystems.disks.s3.stream_reads'))->toBeTrue();
+});
+
 test('without direct transfers the upload page does not hand out upload links', function () {
     Storage::fake('dicom');
 

@@ -33,7 +33,7 @@ class ReorganizeDicomFiles extends Command
         $moved = 0;
         $skipped = 0;
 
-        DicomInstance::with('series.study')->chunkById(200, function ($instances) use ($storage, $disk, $dryRun, &$moved, &$skipped): void {
+        DicomInstance::with('series.study')->whereNull('dicom_archive_id')->chunkById(200, function ($instances) use ($storage, $disk, $dryRun, &$moved, &$skipped): void {
             foreach ($instances as $instance) {
                 $study = $instance->series->study;
                 $target = $storage->pathFor($study->uploaded_by, $study->study_instance_uid, $instance->series->series_instance_uid, $instance->sop_instance_uid, $study->study_date);

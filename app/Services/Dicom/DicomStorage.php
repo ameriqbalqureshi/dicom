@@ -2,6 +2,7 @@
 
 namespace App\Services\Dicom;
 
+use App\Models\DicomInstance;
 use Carbon\CarbonInterface;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
@@ -56,6 +57,14 @@ class DicomStorage
     }
 
     /**
+     * A new, unique path for a zip, which stays there as uploaded.
+     */
+    public function archivePathFor(?int $uploaderId): string
+    {
+        return ($uploaderId === null ? 'unowned' : "users/{$uploaderId}").'/archives/'.Str::uuid().'.zip';
+    }
+
+    /**
      * Whether the path is one handed out by incomingPathFor() for this uploader, so nobody can import another person's
      * upload or any other file on the disk.
      */
@@ -85,6 +94,29 @@ class DicomStorage
     }
 
     /**
+     * The response that gets an instance's bytes to the viewer: its own file or, when it came in a zip, the zip, which
+     * the viewer reads the instance out of with a range request.
+     *
+     * @param  array<string, string>  $headers  Headers for the file itself, e.g. Cache-Control.
+     */
+    public function instanceResponse(DicomInstance $instance, array $headers = []): Response
+    {
+        if ($instance->dicom_archive_id === null) {
+            return $this->fileResponse($instance->file_path, "{$instance->sop_instance_uid}.dcm", $headers);
+        }
+
+        $path = $instance->archive->file_path;
+
+        if ($this->usesDirectTransfers()) {
+            return $this->signedLinkResponse($path, basename($path), 'application/zip', $headers);
+        }
+
+        abort_unless($this->disk()->exists($path), 404);
+
+        return response()->file($this->disk()->path($path), ['Content-Type' => 'application/zip', ...$headers]);
+    }
+
+    /**
      * The response that gets a file to the browser: a redirect to a short-lived signed URL when the disk provides them
      * (S3), so the file does not pass through the application, otherwise the file itself.
      *
@@ -95,21 +127,29 @@ class DicomStorage
         $disk = $this->disk();
 
         if ($this->usesDirectTransfers()) {
-            $url = $disk->temporaryUrl($path, now()->addMinutes(self::DOWNLOAD_LINK_MINUTES), array_filter([
-                'ResponseContentType' => 'application/dicom',
-                'ResponseContentDisposition' => 'inline; filename="'.$downloadName.'"',
-                'ResponseCacheControl' => $headers['Cache-Control'] ?? null,
-            ]));
-
-            return redirect()->away($url)->withHeaders([
-                'Cache-Control' => 'no-store',
-                'Referrer-Policy' => 'no-referrer',
-            ]);
+            return $this->signedLinkResponse($path, $downloadName, 'application/dicom', $headers);
         }
 
         abort_unless($disk->exists($path), 404);
 
         return $disk->response($path, $downloadName, ['Content-Type' => 'application/dicom', ...$headers]);
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     */
+    private function signedLinkResponse(string $path, string $downloadName, string $contentType, array $headers): Response
+    {
+        $url = $this->disk()->temporaryUrl($path, now()->addMinutes(self::DOWNLOAD_LINK_MINUTES), array_filter([
+            'ResponseContentType' => $contentType,
+            'ResponseContentDisposition' => 'inline; filename="'.$downloadName.'"',
+            'ResponseCacheControl' => $headers['Cache-Control'] ?? null,
+        ]));
+
+        return redirect()->away($url)->withHeaders([
+            'Cache-Control' => 'no-store',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
     }
 
     /**

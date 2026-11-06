@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CommentsPdfController;
+use App\Http\Controllers\DicomArchiveChunkController;
 use App\Http\Controllers\DicomInstanceFileController;
 use App\Http\Controllers\GuestCommentsPdfController;
 use App\Http\Controllers\GuestInstanceFileController;
@@ -87,6 +88,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('/studies/{study}', StudyShow::class)->name('studies.show');
 
     Route::get('/instances/{instance}/file', DicomInstanceFileController::class)->name('instances.file');
+    Route::put('/archives/{archive}/chunks', DicomArchiveChunkController::class)->name('archives.chunks');
 
     Route::get('/reports/{report}/pdf', ReportPdfController::class)->name('reports.pdf');
 

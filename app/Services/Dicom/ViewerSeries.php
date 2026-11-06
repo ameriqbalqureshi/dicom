@@ -15,10 +15,11 @@ class ViewerSeries
 {
     /**
      * The single-frame images of a series form one stack (e.g. CT slices), while every multi-frame image is its own
-     * entry, because it is a separate recording such as an angiography cine run.
+     * entry, because it is a separate recording such as an angiography cine run. For images stored in a zip, archiveEntries
+     * tells the viewer, by file URL, which part of the zip to read.
      *
      * @param  Closure(DicomInstance): string  $fileUrl  The URL the viewer downloads an instance's file from.
-     * @return list<array{id: string, label: string, isRun: bool, slices: list<array{url: string, frame: int, instanceNumber: int|null}>}>
+     * @return list<array{id: string, label: string, isRun: bool, slices: list<array{url: string, frame: int, instanceNumber: int|null}>, archiveEntries?: array<string, array{archive: int, offset: int, length: int, size: int, method: int}>}>
      */
     public static function forStudy(Study $study, Closure $fileUrl): array
     {
@@ -33,22 +34,50 @@ class ViewerSeries
                 $entries = [];
 
                 if ($stack->isNotEmpty()) {
-                    $entries[] = ['id' => "series-{$item->id}", 'label' => $label, 'isRun' => false, 'slices' => self::slices($stack, $fileUrl)];
+                    $entries[] = self::entry("series-{$item->id}", $label, false, $stack, $fileUrl);
                 }
 
                 foreach ($runs->values() as $index => $instance) {
-                    $entries[] = [
-                        'id' => "instance-{$instance->id}",
-                        'label' => "{$label} · Run ".($instance->instance_number ?? $index + 1),
-                        'isRun' => true,
-                        'slices' => self::slices(collect([$instance]), $fileUrl),
-                    ];
+                    $entries[] = self::entry(
+                        "instance-{$instance->id}",
+                        "{$label} · Run ".($instance->instance_number ?? $index + 1),
+                        true,
+                        collect([$instance]),
+                        $fileUrl,
+                    );
                 }
 
                 return $entries;
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, DicomInstance>  $instances
+     * @param  Closure(DicomInstance): string  $fileUrl
+     * @return array{id: string, label: string, isRun: bool, slices: list<array{url: string, frame: int, instanceNumber: int|null}>, archiveEntries?: array<string, array{archive: int, offset: int, length: int, size: int, method: int}>}
+     */
+    private static function entry(string $id, string $label, bool $isRun, Collection $instances, Closure $fileUrl): array
+    {
+        $archiveEntries = $instances
+            ->filter(fn (DicomInstance $instance): bool => $instance->dicom_archive_id !== null)
+            ->mapWithKeys(fn (DicomInstance $instance): array => [$fileUrl($instance) => [
+                'archive' => $instance->dicom_archive_id,
+                'offset' => $instance->archive_entry_offset,
+                'length' => $instance->archive_entry_length,
+                'size' => $instance->archive_entry_size,
+                'method' => $instance->archive_entry_method,
+            ]])
+            ->all();
+
+        return [
+            'id' => $id,
+            'label' => $label,
+            'isRun' => $isRun,
+            'slices' => self::slices($instances, $fileUrl),
+            ...($archiveEntries === [] ? [] : ['archiveEntries' => $archiveEntries]),
+        ];
     }
 
     /**

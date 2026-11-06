@@ -70,6 +70,28 @@ class DicomParser
      */
     private const UNSIGNED_SHORT_ATTRIBUTES = ['rows', 'columns'];
 
+    /**
+     * The longest value each attribute may have in the database, where this is not 255 characters.
+     *
+     * @var array<string, int>
+     */
+    private const VALUE_LIMITS = [
+        'transferSyntaxUid' => 64,
+        'sopClassUid' => 64,
+        'sopInstanceUid' => 64,
+        'studyInstanceUid' => 64,
+        'seriesInstanceUid' => 64,
+        'accessionNumber' => 64,
+        'patientId' => 64,
+        'patientSex' => 16,
+        'modality' => 16,
+    ];
+
+    /**
+     * The most frames an attribute from outside may claim, since the viewer lists every frame of a study.
+     */
+    private const MAX_FRAMES = 65535;
+
     /** @var resource */
     private $stream;
 
@@ -102,6 +124,51 @@ class DicomParser
                 fclose($this->stream);
             }
         }
+    }
+
+    /**
+     * Build metadata from header attributes a browser read out of a zip, keyed as in ATTRIBUTES, with the same clean-up
+     * as a parsed file. They arrive from outside, so anything that would not fit the database is dropped or refused.
+     *
+     * @param  array<array-key, mixed>  $attributes
+     *
+     * @throws InvalidDicomFileException
+     */
+    public function metadataFromAttributes(array $attributes): DicomMetadata
+    {
+        $values = [];
+
+        foreach (self::ATTRIBUTES as $name) {
+            $value = $attributes[$name] ?? null;
+
+            if (in_array($name, self::UNSIGNED_SHORT_ATTRIBUTES, true)) {
+                $values[$name] = is_int($value) && $value >= 0 && $value <= 0xFFFF ? $value : null;
+            } elseif (is_string($value)) {
+                $values[$name] = mb_substr(trim($value, " \0"), 0, self::VALUE_LIMITS[$name] ?? 255);
+            }
+        }
+
+        foreach (['seriesNumber', 'instanceNumber', 'numberOfFrames'] as $name) {
+            if (preg_match('/^\d{1,9}(\\\\|$)/', trim($values[$name] ?? '')) !== 1) {
+                unset($values[$name]);
+            }
+        }
+
+        foreach (['transferSyntaxUid', 'sopInstanceUid', 'studyInstanceUid', 'seriesInstanceUid'] as $uid) {
+            if (strlen($attributes[$uid] ?? '') > self::VALUE_LIMITS[$uid]) {
+                throw new InvalidDicomFileException("The file's {$uid} attribute is too long.");
+            }
+        }
+
+        if (blank($values['transferSyntaxUid'] ?? null)) {
+            throw new InvalidDicomFileException('The file meta information has no transfer syntax.');
+        }
+
+        if ((int) ($values['numberOfFrames'] ?? 1) > self::MAX_FRAMES) {
+            throw new InvalidDicomFileException('The file has too many frames.');
+        }
+
+        return $this->buildMetadata($values);
     }
 
     /**

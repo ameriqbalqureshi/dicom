@@ -29,6 +29,11 @@ class DicomInstance extends Model
         'file_path',
         'file_size',
         'uploaded_by',
+        'dicom_archive_id',
+        'archive_entry_offset',
+        'archive_entry_length',
+        'archive_entry_size',
+        'archive_entry_method',
     ];
 
     /**
@@ -44,7 +49,21 @@ class DicomInstance extends Model
             'columns' => 'integer',
             'number_of_frames' => 'integer',
             'file_size' => 'integer',
+            'archive_entry_offset' => 'integer',
+            'archive_entry_length' => 'integer',
+            'archive_entry_size' => 'integer',
+            'archive_entry_method' => 'integer',
         ];
+    }
+
+    /**
+     * The zip holding this instance's bytes, when it does not have a file of its own.
+     *
+     * @return BelongsTo<DicomArchive, $this>
+     */
+    public function archive(): BelongsTo
+    {
+        return $this->belongsTo(DicomArchive::class, 'dicom_archive_id');
     }
 
     /**

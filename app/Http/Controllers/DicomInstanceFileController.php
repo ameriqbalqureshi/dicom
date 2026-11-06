@@ -16,7 +16,7 @@ class DicomInstanceFileController extends Controller
     {
         Gate::authorize('view', $instance->series->study);
 
-        return $storage->fileResponse($instance->file_path, "{$instance->sop_instance_uid}.dcm", [
+        return $storage->instanceResponse($instance, [
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }
