@@ -324,6 +324,7 @@ export default function dicomViewer(series) {
         error: null,
         image: null,
         playing: false,
+        playPending: false,
         frameRate: DEFAULT_FRAME_RATE,
         isFullscreen: false,
         magnifier: false,
@@ -364,18 +365,36 @@ export default function dicomViewer(series) {
             resizeObserver?.disconnect();
         },
 
-        selectSeries(index) {
+        async selectSeries(index) {
             if (index === this.seriesIndex || index < 0 || index >= this.series.length) {
                 return;
             }
 
+            const shouldKeepPlaying = this.playing || this.playPending;
+
             this.pause();
+            this.playPending = shouldKeepPlaying;
+            const session = playSession;
             fileCache.clear();
             this.calibrating = false;
             this.seriesIndex = index;
             this.sliceIndex = 0;
-            this.loadSlice({ resetWindow: true });
             this.$refs.viewport.focus();
+            await this.loadSlice({ resetWindow: true });
+
+            if (session === playSession && this.playPending) {
+                this.resumePlayback();
+            }
+        },
+
+        // Starts only after the first image, which sets the series' frame rate and window. A series with one image has
+        // nothing to play, so the intent carries on to the next series.
+        resumePlayback() {
+            if (this.status === 'error') {
+                this.playPending = false;
+            } else if (this.slices.length >= 2) {
+                this.play();
+            }
         },
 
         previousSeries() {
@@ -414,7 +433,7 @@ export default function dicomViewer(series) {
         },
 
         togglePlay() {
-            this.playing ? this.pause() : this.play();
+            this.playing || this.playPending ? this.pause() : this.play();
         },
 
         async play() {
@@ -423,6 +442,7 @@ export default function dicomViewer(series) {
             }
 
             const session = ++playSession;
+            this.playPending = false;
             this.playing = true;
 
             while (session === playSession) {
@@ -437,6 +457,7 @@ export default function dicomViewer(series) {
 
         pause() {
             playSession++;
+            this.playPending = false;
             this.playing = false;
         },
 

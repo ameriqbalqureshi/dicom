@@ -21,9 +21,9 @@
             <div class="flex items-center gap-1" role="group" aria-label="Frame navigation">
                 <x-viewer-button label="First image (Home)" x-on:click="first()" x-bind:disabled="sliceIndex === 0">|&lsaquo;</x-viewer-button>
                 <x-viewer-button label="Previous image (←)" x-on:click="step(-1)" x-bind:disabled="sliceIndex === 0">&lsaquo;</x-viewer-button>
-                <x-viewer-button label="Play / pause (Space)" x-on:click="togglePlay()" x-bind:disabled="slices.length < 2"
-                    x-bind:class="playing && 'border-sky-600 bg-sky-950/60'" class="w-20">
-                    <span x-text="playing ? 'Pause' : 'Play'"></span>
+                <x-viewer-button label="Play / pause (Space)" x-on:click="togglePlay()" x-bind:disabled="slices.length < 2 && !playPending"
+                    x-bind:class="(playing || playPending) && 'border-sky-600 bg-sky-950/60'" class="w-20">
+                    <span x-text="playing || playPending ? 'Pause' : 'Play'"></span>
                 </x-viewer-button>
                 <x-viewer-button label="Next image (→)" x-on:click="step(1)" x-bind:disabled="sliceIndex >= slices.length - 1">&rsaquo;</x-viewer-button>
                 <x-viewer-button label="Last image (End)" x-on:click="last()" x-bind:disabled="sliceIndex >= slices.length - 1">&rsaquo;|</x-viewer-button>
