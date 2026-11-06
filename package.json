@@ -15,6 +15,7 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "@zip.js/zip.js": "^2.24.0",
         "dicom-parser": "^1.8.21",
         "jpeg-lossless-decoder-js": "^2.1.2"
     }

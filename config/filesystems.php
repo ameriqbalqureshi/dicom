@@ -12,6 +12,9 @@ $s3 = [
     'retain_visibility' => false,
     'throw' => false,
     'report' => false,
+    // Give up on a stalled connection and retry, well within PHP's time limit, rather than hang until PHP kills the request.
+    'http' => ['connect_timeout' => 5, 'timeout' => 15],
+    'retries' => 2,
 ];
 
 $mediaOnS3 = env('MEDIA_DISK', 'local') === 's3';

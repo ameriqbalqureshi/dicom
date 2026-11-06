@@ -6,8 +6,11 @@ use App\Models\DicomInstance;
 use App\Models\Series;
 use App\Models\Study;
 use App\Models\User;
+use App\Services\Dicom\DicomImporter;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToCheckFileExistence;
 use Livewire\Livewire;
 use Tests\Support\DicomFileBuilder;
 
@@ -113,6 +116,65 @@ test('results of files uploaded one request at a time accumulate until cleared',
         ->and(DicomInstance::count())->toBe(2);
 
     $component->call('clearResults')->assertSet('results', []);
+});
+
+test('a large upload counts every file but lists only some, and failures stay visible', function () {
+    $sliceCount = UploadStudies::MAX_LISTED_RESULTS + 5;
+    $slices = collect(range(1, $sliceCount))->map(fn (int $slice) => dicomUpload(
+        "slice-{$slice}.dcm",
+        (new DicomFileBuilder)->with(0x0008, 0x0018, 'UI', "1.2.826.0.1.3680043.2.1.{$slice}"),
+    ))->all();
+
+    $component = Livewire::actingAs(User::factory()->technician()->create())->test(UploadStudies::class);
+
+    $component->set('files', $slices);
+    $component->set('files', [UploadedFile::fake()->createWithContent('notes.txt', 'hello')]);
+
+    $study = Study::sole();
+
+    $component
+        ->assertSet('resultCounts', ['imported' => $sliceCount, 'skipped' => 0, 'failed' => 1])
+        ->assertSet('importedStudyIds', [$study->id])
+        ->assertSee("{$sliceCount} imported")
+        ->assertSee('notes.txt')
+        ->assertDontSee("slice-{$sliceCount}.dcm");
+
+    expect($component->get('results'))->toHaveCount(UploadStudies::MAX_LISTED_RESULTS + 1)
+        ->and($study->series()->sole()->instances()->count())->toBe($sliceCount);
+});
+
+test('clearing results also clears the counts and study links', function () {
+    Livewire::actingAs(User::factory()->technician()->create())
+        ->test(UploadStudies::class)
+        ->set('files', [dicomUpload('slice.dcm')])
+        ->call('clearResults')
+        ->assertSet('resultCounts', ['imported' => 0, 'skipped' => 0, 'failed' => 0])
+        ->assertSet('importedStudyIds', []);
+});
+
+test('a storage failure on one file is reported and does not stop the others', function () {
+    Exceptions::fake();
+
+    $failure = UnableToCheckFileExistence::forLocation('incoming/slice.dcm');
+    $technician = User::factory()->technician()->create();
+    $importer = app(DicomImporter::class);
+
+    $this->mock(DicomImporter::class)
+        ->shouldReceive('import')
+        ->twice()
+        ->andReturnUsing(
+            fn () => throw $failure,
+            fn (string $path, User $uploader) => $importer->import($path, $uploader),
+        );
+
+    Livewire::actingAs($technician)
+        ->test(UploadStudies::class)
+        ->set('files', [dicomUpload('stalled.dcm'), dicomUpload('fine.dcm')])
+        ->assertSet('resultCounts', ['imported' => 1, 'skipped' => 0, 'failed' => 1])
+        ->assertSee('Storage did not respond.');
+
+    Exceptions::assertReported(UnableToCheckFileExistence::class);
+    expect(DicomInstance::count())->toBe(1);
 });
 
 test('a file that is not DICOM is reported and not stored', function () {

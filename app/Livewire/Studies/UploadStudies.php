@@ -14,6 +14,7 @@ use App\Services\Dicom\InvalidDicomFileException;
 use App\Services\Dicom\StudyLimitReachedException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
+use League\Flysystem\FilesystemException;
 use Livewire\Attributes\Renderless;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -25,13 +26,25 @@ class UploadStudies extends Component
 {
     use WithFileUploads;
 
-    public const MAX_FILES = 200;
+    public const MAX_FILES = 5000;
+
+    /**
+     * How many files are listed individually, which keeps every request small during a study of thousands of images.
+     * Failures may use twice this many rows, so they are still shown after a long run of successes.
+     */
+    public const MAX_LISTED_RESULTS = 100;
 
     /** @var array<int, TemporaryUploadedFile> */
     public array $files = [];
 
     /** @var list<array{name: string, status: string, message: string, studyId: int|null}> */
     public array $results = [];
+
+    /** @var array{imported: int, skipped: int, failed: int} */
+    public array $resultCounts = ['imported' => 0, 'skipped' => 0, 'failed' => 0];
+
+    /** @var list<int> */
+    public array $importedStudyIds = [];
 
     public function mount(): void
     {
@@ -77,7 +90,7 @@ class UploadStudies extends Component
         $importer = app(DicomImporter::class);
 
         foreach ($this->files as $file) {
-            $this->results[] = $this->importFile($importer, $file);
+            $this->recordResult($this->importFile($importer, $file));
         }
 
         $this->reset('files');
@@ -89,7 +102,7 @@ class UploadStudies extends Component
      */
     public function clearResults(): void
     {
-        $this->reset('results');
+        $this->reset('results', 'resultCounts', 'importedStudyIds');
         $this->resetErrorBag();
     }
 
@@ -140,7 +153,7 @@ class UploadStudies extends Component
             abort(403);
         }
 
-        $this->results[] = $this->importWith(Str::limit($name, 255), fn () => $importer->importUploaded($path, $user));
+        $this->recordResult($this->importWith(Str::limit($name, 255), fn () => $importer->importUploaded($path, $user)));
     }
 
     /**
@@ -148,7 +161,27 @@ class UploadStudies extends Component
      */
     private function addFailure(string $name, string $message): void
     {
-        $this->results[] = ['name' => Str::limit($name, 255), 'status' => 'failed', 'message' => $message, 'studyId' => null];
+        $this->recordResult(['name' => Str::limit($name, 255), 'status' => 'failed', 'message' => $message, 'studyId' => null]);
+    }
+
+    /**
+     * Count a file's outcome, and list it individually while there is room.
+     *
+     * @param  array{name: string, status: string, message: string, studyId: int|null}  $result
+     */
+    private function recordResult(array $result): void
+    {
+        $this->resultCounts[$result['status']]++;
+
+        if ($result['studyId'] !== null && ! in_array($result['studyId'], $this->importedStudyIds, true)) {
+            $this->importedStudyIds[] = $result['studyId'];
+        }
+
+        $listLimit = $result['status'] === 'failed' ? self::MAX_LISTED_RESULTS * 2 : self::MAX_LISTED_RESULTS;
+
+        if (count($this->results) < $listLimit) {
+            $this->results[] = $result;
+        }
     }
 
     /**
@@ -179,6 +212,10 @@ class UploadStudies extends Component
             return ['name' => $name, 'status' => 'skipped', 'message' => 'Already uploaded.', 'studyId' => null];
         } catch (InvalidDicomFileException|StudyLimitReachedException|QuotaExceededException $exception) {
             return ['name' => $name, 'status' => 'failed', 'message' => $exception->getMessage(), 'studyId' => null];
+        } catch (FilesystemException $exception) {
+            report($exception);
+
+            return ['name' => $name, 'status' => 'failed', 'message' => 'Storage did not respond. Upload the same files again to add the missing ones.', 'studyId' => null];
         }
     }
 

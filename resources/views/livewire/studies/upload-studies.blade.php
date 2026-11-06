@@ -2,7 +2,7 @@
     <div>
         <h1 class="text-2xl font-semibold tracking-tight">Upload DICOM</h1>
         <p class="mt-1 text-sm text-slate-400">
-            Choose DICOM files, or a whole folder such as the DICOM folder on a patient CD. Files are recognised by their content, so names without .dcm are fine, and anything else in the folder is skipped.
+            Choose DICOM files, a .zip of them, or a whole folder such as the DICOM folder on a patient CD. Files are recognised by their content, so names without .dcm are fine, and anything else is skipped.
             They are imported as soon as the upload finishes and grouped into studies and series automatically.
         </p>
     </div>
@@ -38,6 +38,7 @@
     --}}
     <div x-data="{
             maxFiles: {{ App\Livewire\Studies\UploadStudies::MAX_FILES }},
+            maxFileSize: {{ App\Services\Dicom\DicomImporter::MAX_FILE_SIZE }},
             directUploads: @js($directUploads),
             parallelUploads: 3,
             uploading: false,
@@ -49,6 +50,9 @@
             dragging: false,
             skipped: 0,
             noDicomFound: false,
+            dicomFound: 0,
+            encryptedZips: [],
+            unreadableZips: [],
             failedFiles: [],
             async chooseFiles(input) {
                 const files = Array.from(input.files);
@@ -105,80 +109,152 @@
             withExtension(file) {
                 return /\.[^.]+$/.test(file.name) ? file : new File([file], file.name + '.dcm', { type: file.type });
             },
+            {{-- Each upload is read only when its turn comes, so a zip is extracted one image at a time. Zip entries are only known to be DICOM once extracted. --}}
+            async uploadsIn(selected) {
+                const uploads = [];
+
+                for (const file of selected) {
+                    if (await this.isDicom(file)) {
+                        uploads.push({ name: file.name, size: file.size, read: async () => file });
+                    } else if (await window.dicomZip.isZip(file)) {
+                        uploads.push(...await this.uploadsInZip(file));
+                    } else {
+                        this.skipped++;
+                    }
+                }
+
+                return uploads;
+            },
+            async uploadsInZip(file) {
+                try {
+                    const zip = await window.dicomZip.readZip(file);
+
+                    if (zip.isEncrypted) {
+                        this.encryptedZips.push(file.name);
+
+                        return [];
+                    }
+
+                    this.skipped += zip.ignored;
+
+                    return zip.uploads;
+                } catch (error) {
+                    this.unreadableZips.push(file.name);
+
+                    return [];
+                }
+            },
+            {{-- The file to send for an upload, or null when it turns out not to be DICOM. --}}
+            async readUpload(upload) {
+                if (upload.size > this.maxFileSize) {
+                    throw new Error('The file is too large.');
+                }
+
+                const file = await upload.read();
+
+                if (await this.isDicom(file)) {
+                    this.dicomFound++;
+
+                    return file;
+                }
+
+                this.skipped++;
+
+                return null;
+            },
             async uploadFiles(selected) {
                 if (selected.length === 0) {
                     return;
                 }
 
+                this.skipped = 0;
+                this.dicomFound = 0;
+                this.encryptedZips = [];
+                this.unreadableZips = [];
+                this.failedFiles = [];
+                this.noDicomFound = false;
                 this.scanning = true;
-                const checks = await Promise.all(selected.map((file) => this.isDicom(file)));
-                const files = selected.filter((file, index) => checks[index]);
+                const uploads = await this.uploadsIn(selected);
                 this.scanning = false;
 
-                this.skipped = selected.length - files.length;
-                this.noDicomFound = files.length === 0;
-                this.tooMany = files.length > this.maxFiles;
-                if (this.noDicomFound || this.tooMany) {
+                this.tooMany = uploads.length > this.maxFiles;
+                if (uploads.length === 0 || this.tooMany) {
+                    this.noDicomFound = uploads.length === 0 && this.encryptedZips.length === 0 && this.unreadableZips.length === 0;
+
                     return;
                 }
 
-                this.failedFiles = [];
                 await this.$wire.clearResults();
                 this.uploading = true;
-                this.total = files.length;
+                this.total = uploads.length;
                 this.current = 0;
                 this.progress = 0;
 
                 if (this.directUploads) {
-                    await this.uploadToStorage(files);
+                    await this.uploadToStorage(uploads);
                 } else {
-                    await this.uploadToServer(files);
+                    await this.uploadToServer(uploads);
                 }
 
                 this.uploading = false;
+                this.noDicomFound = this.dicomFound === 0 && this.failedFiles.length === 0;
             },
-            async uploadToServer(files) {
-                for (const [index, file] of files.entries()) {
+            async uploadToServer(uploads) {
+                for (const [index, upload] of uploads.entries()) {
                     this.current = index + 1;
+                    let file = null;
+
+                    try {
+                        file = await this.readUpload(upload);
+                    } catch (error) {
+                        this.failedFiles.push(upload.name);
+                    }
+
+                    if (! file) {
+                        this.progress = Math.round((index + 1) / uploads.length * 100);
+                        continue;
+                    }
+
                     await new Promise((resolve) => this.$wire.upload(
                         'files',
                         this.withExtension(file),
                         resolve,
-                        () => { this.failedFiles.push(file.name); resolve(); },
-                        (event) => { this.progress = Math.round((index + event.detail.progress / 100) / files.length * 100); },
+                        () => { this.failedFiles.push(upload.name); resolve(); },
+                        (event) => { this.progress = Math.round((index + event.detail.progress / 100) / uploads.length * 100); },
                         resolve,
                     ));
                 }
             },
-            async uploadToStorage(files) {
-                const totalBytes = files.reduce((sum, file) => sum + file.size, 0) || 1;
-                const sent = files.map(() => 0);
+            async uploadToStorage(uploads) {
+                const totalBytes = uploads.reduce((sum, upload) => sum + upload.size, 0) || 1;
+                const sent = uploads.map(() => 0);
                 const showProgress = () => { this.progress = Math.round(sent.reduce((sum, bytes) => sum + bytes, 0) / totalBytes * 100); };
                 let next = 0;
 
                 const uploadNext = async () => {
-                    while (next < files.length) {
+                    while (next < uploads.length) {
                         const index = next++;
-                        const file = files[index];
+                        const upload = uploads[index];
 
                         try {
-                            const target = await this.$wire.prepareUpload(file.name, file.size);
+                            const file = await this.readUpload(upload);
+                            const target = file ? await this.$wire.prepareUpload(file.name, file.size) : null;
 
                             if (target) {
                                 await this.put(target, file, (bytes) => { sent[index] = bytes; showProgress(); });
                                 await this.$wire.importUpload(target.path, file.name);
                             }
                         } catch (error) {
-                            this.failedFiles.push(file.name);
+                            this.failedFiles.push(upload.name);
                         }
 
-                        sent[index] = file.size;
+                        sent[index] = upload.size;
                         this.current++;
                         showProgress();
                     }
                 };
 
-                await Promise.all(Array.from({ length: Math.min(this.parallelUploads, files.length) }, uploadNext));
+                await Promise.all(Array.from({ length: Math.min(this.parallelUploads, uploads.length) }, uploadNext));
                 await this.$wire.$refresh();
             },
             put(target, file, onProgress) {
@@ -207,12 +283,12 @@
                 </label>
                 <label class="rounded-md border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200"
                     :class="(uploading || scanning) ? 'pointer-events-none' : 'cursor-pointer hover:border-sky-600'">
-                    Choose files
+                    Choose files or .zip
                     <input x-on:change="chooseFiles($event.target)" :disabled="uploading || scanning" type="file" multiple class="sr-only">
                 </label>
             </div>
-            <span class="text-sm text-slate-400">or drop files or a folder here</span>
-            <span class="text-xs text-slate-500">Up to {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} DICOM files, 100 MB each. For a CD, choose its DICOM folder or the whole disc.</span>
+            <span class="text-sm text-slate-400">or drop files, a .zip or a folder here</span>
+            <span class="text-xs text-slate-500">Up to {{ number_format(App\Livewire\Studies\UploadStudies::MAX_FILES) }} files, 100 MB each. For a CD, choose its DICOM folder or the whole disc.</span>
         </div>
 
         <p x-show="scanning" x-cloak class="text-sm text-slate-300">Looking for DICOM files…</p>
@@ -225,6 +301,14 @@
             No DICOM files were found in the selection.
         </p>
 
+        <p x-show="encryptedZips.length > 0" x-cloak class="text-sm text-red-400">
+            Password-protected zips cannot be read. Zip the images again without a password: <span class="text-red-300" x-text="encryptedZips.join(', ')"></span>
+        </p>
+
+        <p x-show="unreadableZips.length > 0" x-cloak class="text-sm text-red-400">
+            These zips could not be opened and may be damaged or incomplete: <span class="text-red-300" x-text="unreadableZips.join(', ')"></span>
+        </p>
+
         <div x-show="uploading" x-cloak class="flex flex-col gap-1.5">
             <div class="text-sm text-slate-300">
                 Uploading and importing: <span x-text="current"></span> of <span x-text="total"></span> files done… <span x-text="progress + '%'"></span>
@@ -235,7 +319,7 @@
         </div>
 
         <p x-show="tooMany" x-cloak class="text-sm text-red-400">
-            The selection contains more than {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} DICOM files. Upload at most {{ App\Livewire\Studies\UploadStudies::MAX_FILES }} at a time, for example one series folder at a time.
+            The selection contains more than {{ number_format(App\Livewire\Studies\UploadStudies::MAX_FILES) }} files. Upload at most {{ number_format(App\Livewire\Studies\UploadStudies::MAX_FILES) }} at a time, for example one series folder at a time.
         </p>
 
         <div x-show="failedFiles.length > 0" x-cloak class="text-sm text-red-400">
@@ -250,6 +334,24 @@
     </div>
 
     @if (count($results) > 0)
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span class="text-emerald-400">{{ number_format($resultCounts['imported']) }} imported</span>
+            @if ($resultCounts['skipped'] > 0)
+                <span class="text-amber-400">{{ number_format($resultCounts['skipped']) }} already uploaded</span>
+            @endif
+            @if ($resultCounts['failed'] > 0)
+                <span class="text-red-400">{{ number_format($resultCounts['failed']) }} failed</span>
+            @endif
+            @if (count($importedStudyIds) === 1)
+                <a href="{{ route('studies.show', $importedStudyIds[0]) }}" class="font-medium text-sky-400 hover:text-sky-300">Open study</a>
+            @elseif (count($importedStudyIds) > 1)
+                <a href="{{ route('studies.index') }}" class="font-medium text-sky-400 hover:text-sky-300">View {{ count($importedStudyIds) }} studies</a>
+            @endif
+            @if (count($results) < array_sum($resultCounts))
+                <span class="text-slate-500">Showing {{ count($results) }} of {{ number_format(array_sum($resultCounts)) }} files.</span>
+            @endif
+        </div>
+
         <div class="overflow-hidden rounded-xl border border-slate-800">
             <table class="w-full text-left text-sm">
                 <thead class="bg-slate-900 text-xs uppercase tracking-wide text-slate-400">
@@ -260,7 +362,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800">
-                    @foreach ($results as $index => $result)
+                    @foreach (collect($results)->sortBy(fn (array $result) => $result['status'] === 'failed' ? 0 : 1) as $index => $result)
                         <tr wire:key="result-{{ $index }}">
                             <td class="px-4 py-3 text-slate-300">{{ $result['name'] }}</td>
                             <td @class([
