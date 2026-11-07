@@ -60,7 +60,7 @@ class StudySharing
             ]);
         });
 
-        $recipient->notify(new StudySharedWithYou($study, $sharer, awaitingAcceptance: ! $share->isAccepted()));
+        BestEffortNotifier::send($recipient, new StudySharedWithYou($study, $sharer, awaitingAcceptance: ! $share->isAccepted()));
 
         return $share->isAccepted() ? ShareOutcome::Shared : ShareOutcome::AwaitingAcceptance;
     }
@@ -82,7 +82,9 @@ class StudySharing
             }
         });
 
-        $share->sharer?->notify(new ShareAccepted($share->study, $share->recipient));
+        if ($share->sharer !== null) {
+            BestEffortNotifier::send($share->sharer, new ShareAccepted($share->study, $share->recipient));
+        }
     }
 
     /**

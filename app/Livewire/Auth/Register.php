@@ -5,12 +5,12 @@ namespace App\Livewire\Auth;
 use App\Enums\Role;
 use App\Models\User;
 use App\Notifications\PhysicianSignedUp;
+use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Layout;
@@ -95,10 +95,10 @@ class Register extends Component
             return $user;
         });
 
-        event(new Registered($user));
+        rescue(fn () => event(new Registered($user)));
 
         if ($isPhysician) {
-            Notification::send(User::admins()->get(), new PhysicianSignedUp($user));
+            BestEffortNotifier::send(User::admins()->get(), new PhysicianSignedUp($user));
         }
 
         Auth::login($user);

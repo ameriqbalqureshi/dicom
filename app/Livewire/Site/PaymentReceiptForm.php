@@ -8,10 +8,10 @@ use App\Models\PaymentSubmission;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\PaymentReceiptSubmitted;
+use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -99,7 +99,7 @@ class PaymentReceiptForm extends Component
                 'notes' => filled($validated['notes']) ? $validated['notes'] : null,
             ]);
 
-            Notification::send(User::admins()->get(), new PaymentReceiptSubmitted);
+            BestEffortNotifier::send(User::admins()->get(), new PaymentReceiptSubmitted);
         }
 
         $this->reset('name', 'accountIdentifier', 'phone', 'packageId', 'paymentAccountId', 'paymentReference', 'notes', 'receipt');

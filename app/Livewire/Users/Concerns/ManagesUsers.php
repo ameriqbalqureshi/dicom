@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Models\Package;
 use App\Models\User;
 use App\Notifications\PhysicianVerified;
+use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
 use App\Services\StudySharing;
 use App\Services\UserDeleter;
@@ -60,7 +61,7 @@ trait ManagesUsers
         }
 
         $user->markPhysicianVerified();
-        $user->notify(new PhysicianVerified);
+        BestEffortNotifier::send($user, new PhysicianVerified);
         $this->status = "{$user->name} is verified. They can now receive shared studies and sign reports.";
     }
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Subscription;
 use App\Notifications\PackageEndingSoon;
+use App\Services\BestEffortNotifier;
 use Illuminate\Console\Command;
 
 class SendPackageExpiryReminders extends Command
@@ -41,9 +42,10 @@ class SendPackageExpiryReminders extends Command
             ->with(['user', 'package'])
             ->lazyById()
             ->each(function (Subscription $subscription) use (&$count): void {
-                $subscription->user->notify(new PackageEndingSoon($subscription));
-                $subscription->forceFill(['expiry_reminder_sent_at' => now()])->save();
-                $count++;
+                if (BestEffortNotifier::send($subscription->user, new PackageEndingSoon($subscription))) {
+                    $subscription->forceFill(['expiry_reminder_sent_at' => now()])->save();
+                    $count++;
+                }
             });
 
         $this->info("Sent {$count} ".str('reminder')->plural($count).'.');

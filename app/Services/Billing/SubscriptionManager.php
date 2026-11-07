@@ -10,9 +10,9 @@ use App\Models\User;
 use App\Notifications\PackageStarted;
 use App\Notifications\PaymentRejected;
 use App\Notifications\PaymentSubmitted;
+use App\Services\BestEffortNotifier;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -64,7 +64,7 @@ class SubscriptionManager
             return $this->activate($subscription);
         }
 
-        Notification::send(User::admins()->get(), new PaymentSubmitted($subscription));
+        BestEffortNotifier::send(User::admins()->get(), new PaymentSubmitted($subscription));
 
         return $subscription;
     }
@@ -138,7 +138,7 @@ class SubscriptionManager
         $subscription->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()]);
         $this->activate($subscription);
 
-        $subscription->user->notify(new PackageStarted($subscription));
+        BestEffortNotifier::send($subscription->user, new PackageStarted($subscription));
 
         return $subscription;
     }
@@ -154,7 +154,7 @@ class SubscriptionManager
             'rejection_reason' => $reason,
         ])->save();
 
-        $subscription->user->notify(new PaymentRejected($subscription));
+        BestEffortNotifier::send($subscription->user, new PaymentRejected($subscription));
     }
 
     /**
@@ -172,7 +172,7 @@ class SubscriptionManager
         $subscription->forceFill(['reviewed_by' => $admin->id, 'reviewed_at' => now()]);
         $this->activate($subscription);
 
-        $user->notify(new PackageStarted($subscription));
+        BestEffortNotifier::send($user, new PackageStarted($subscription));
 
         return $subscription;
     }

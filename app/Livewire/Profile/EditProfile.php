@@ -87,7 +87,7 @@ class EditProfile extends Component
         $this->reset('emailPassword');
 
         if ($emailChanged) {
-            $user->sendEmailVerificationNotification();
+            rescue(fn () => $user->sendEmailVerificationNotification());
 
             $this->redirectRoute('verification.notice');
 

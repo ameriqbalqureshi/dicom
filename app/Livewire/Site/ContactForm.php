@@ -4,8 +4,8 @@ namespace App\Livewire\Site;
 
 use App\Models\User;
 use App\Notifications\ContactMessageReceived;
+use App\Services\BestEffortNotifier;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -79,13 +79,19 @@ class ContactForm extends Component
         RateLimiter::hit($throttleKey, 3600);
 
         if ($this->website === '') {
-            Notification::send(User::admins()->get(), new ContactMessageReceived(
+            $isHandedOver = BestEffortNotifier::send(User::admins()->get(), new ContactMessageReceived(
                 name: trim($validated['name']),
                 email: $validated['email'],
                 organisation: filled($validated['organisation']) ? trim($validated['organisation']) : null,
                 topic: self::topics()[$validated['topic']],
                 message: trim($validated['message']),
             ));
+
+            if (! $isHandedOver) {
+                throw ValidationException::withMessages([
+                    'message' => 'Your message could not be sent just now. Please try again in a few minutes.',
+                ]);
+            }
         }
 
         $this->reset('name', 'email', 'organisation', 'topic', 'message');

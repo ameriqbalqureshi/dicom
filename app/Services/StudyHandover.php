@@ -12,7 +12,6 @@ use App\Services\Billing\QuotaExceededException;
 use App\Services\Dicom\StudyDeleter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
 use InvalidArgumentException;
 
 /**
@@ -63,7 +62,7 @@ class StudyHandover
             ]);
         });
 
-        Notification::send($physicians, new StudyReleased($study, $formerOwnerName, $expired, $study->handover_ends_at));
+        BestEffortNotifier::send($physicians, new StudyReleased($study, $formerOwnerName, $expired, $study->handover_ends_at));
 
         return true;
     }

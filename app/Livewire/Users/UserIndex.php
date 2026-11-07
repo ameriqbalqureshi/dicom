@@ -7,6 +7,7 @@ use App\Livewire\Users\Concerns\ManagesUsers;
 use App\Models\Package;
 use App\Models\User;
 use App\Notifications\AccountCreated;
+use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
 use App\Services\UserDeleter;
 use Illuminate\Contracts\View\View;
@@ -98,7 +99,7 @@ class UserIndex extends Component
             $subscriptions->startTrial($user);
         }
 
-        $user->notify(new AccountCreated(auth()->user()));
+        BestEffortNotifier::send($user, new AccountCreated(auth()->user()));
 
         $this->reset('name', 'email', 'password', 'role');
         $this->status = 'User created.';

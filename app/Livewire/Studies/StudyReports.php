@@ -6,6 +6,7 @@ use App\Enums\Quota;
 use App\Models\Report;
 use App\Models\Study;
 use App\Notifications\ReportFinalized;
+use App\Services\BestEffortNotifier;
 use App\Services\Billing\PackageLimits;
 use App\Services\Billing\QuotaExceededException;
 use Illuminate\Contracts\View\View;
@@ -123,7 +124,7 @@ class StudyReports extends Component
         $owner = $this->study->uploader;
 
         if ($owner !== null && $owner->isNot(auth()->user())) {
-            $owner->notify(new ReportFinalized($report));
+            BestEffortNotifier::send($owner, new ReportFinalized($report));
         }
 
         $this->status = 'Report finalized. Everyone who can open this study can now read it.';
