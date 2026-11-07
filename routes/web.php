@@ -12,6 +12,7 @@ use App\Http\Controllers\PaymentReceiptFileController;
 use App\Http\Controllers\PaymentReceiptPdfController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportPdfController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\VerifyEmailController;
 use App\Livewire\Auth\ForgotPassword;
 use App\Livewire\Auth\Login;
@@ -46,6 +47,7 @@ Route::view('/contact', 'site.contact')->name('contact');
 Route::view('/privacy', 'site.privacy')->name('privacy');
 Route::view('/terms', 'site.terms')->name('terms');
 Route::view('/payment-receipt', 'site.payment-receipt')->middleware('throttle:30,1')->name('payment-receipt');
+Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 
 Route::livewire('/guest/{token}', GuestStudy::class)
     ->where('token', '[A-Za-z0-9]{'.GuestLinkIssuer::TOKEN_LENGTH.'}')

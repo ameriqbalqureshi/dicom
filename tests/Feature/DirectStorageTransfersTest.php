@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Studies\UploadStudies;
+use App\Models\DicomArchive;
 use App\Models\DicomInstance;
 use App\Models\GuestLink;
 use App\Models\Study;
@@ -8,9 +9,17 @@ use App\Models\User;
 use App\Services\Dicom\DicomImporter;
 use App\Services\Dicom\DicomStorage;
 use App\Services\GuestLinkIssuer;
+use Aws\CommandInterface;
+use Aws\MockHandler;
+use Aws\Result;
+use Aws\S3\Exception\S3Exception;
 use Carbon\CarbonInterface;
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use GuzzleHttp\Psr7\Utils as Psr7Utils;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Flysystem\UnableToReadFile;
 use Livewire\Livewire;
 use Tests\Support\DicomFileBuilder;
 
@@ -149,6 +158,68 @@ test('nobody can import another person\'s upload or any other file on the disk',
 
 test('S3 reads are streamed, so checking the start of an upload does not download all of it', function () {
     expect(config('filesystems.disks.s3.stream_reads'))->toBeTrue();
+});
+
+/**
+ * Puts a real S3 disk in place, answering requests from the given queue instead of the network.
+ *
+ * @param  list<Result|callable>  $responses
+ */
+function fakeS3Responses(array $responses): void
+{
+    Storage::set('dicom', Storage::build([
+        'driver' => 's3',
+        'key' => 'key',
+        'secret' => 'secret',
+        'region' => 'ap-south-1',
+        'bucket' => 'bucket',
+        'root' => 'dicom',
+        'throw' => true,
+        'stream_reads' => true,
+        'handler' => new MockHandler($responses),
+    ]));
+}
+
+test('on S3, the start of a file is requested alone, so reading it never involves the rest of the file', function () {
+    $command = null;
+
+    fakeS3Responses([function (CommandInterface $sent) use (&$command) {
+        $command = $sent;
+
+        return new Result(['Body' => Psr7Utils::streamFor('PK')]);
+    }]);
+
+    expect(app(DicomStorage::class)->readStart('users/1/archives/a.zip', 2))->toBe('PK')
+        ->and($command['Key'])->toBe('dicom/users/1/archives/a.zip')
+        ->and($command['Range'])->toBe('bytes=0-1')
+        ->and($command['@http']['stream'] ?? false)->toBeFalse();
+});
+
+test('on S3, an empty file reads as empty rather than as a storage failure', function () {
+    fakeS3Responses([fn (CommandInterface $command) => new S3Exception('Invalid range', $command, ['response' => new Psr7Response(416)])]);
+
+    expect(app(DicomStorage::class)->readStart('users/1/archives/a.zip', 4))->toBe('');
+});
+
+test('a zip S3 will not hand back is reported as a storage failure and can be tried again', function () {
+    Exceptions::fake();
+    $technician = User::factory()->technician()->create();
+    $archive = DicomArchive::factory()->pending()->for($technician, 'uploader')->create();
+
+    fakeS3Responses([
+        new Result,
+        new Result(['ContentLength' => 100]),
+        fn (CommandInterface $command) => new S3Exception('Access denied', $command, ['response' => new Psr7Response(403)]),
+    ]);
+
+    Livewire::actingAs($technician)
+        ->test(UploadStudies::class)
+        ->call('confirmArchive', $archive->id)
+        ->assertReturned(false)
+        ->assertSet('results.0.message', 'Storage did not respond. Please try this zip again.');
+
+    Exceptions::assertReported(UnableToReadFile::class);
+    expect($archive->fresh()->uploaded_at)->toBeNull();
 });
 
 test('without direct transfers the upload page does not hand out upload links', function () {

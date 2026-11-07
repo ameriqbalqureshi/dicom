@@ -5,6 +5,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>{{ isset($title) ? $title.' · ' : '' }}{{ config('app.name') }}</title>
+        @include('site.partials.seo-meta', [
+            'title' => $title ?? null,
+            'description' => null,
+            'indexable' => request()->routeIs('login', 'register'),
+        ])
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>

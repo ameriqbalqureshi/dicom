@@ -3,10 +3,13 @@
 namespace App\Services\Dicom;
 
 use App\Models\DicomInstance;
+use Aws\Exception\AwsException;
 use Carbon\CarbonInterface;
+use Illuminate\Filesystem\AwsS3V3Adapter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Flysystem\UnableToReadFile;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -164,6 +167,41 @@ class DicomStorage
             $this->directoryName($seriesInstanceUid),
             $this->directoryName($sopInstanceUid).'.dcm',
         ]);
+    }
+
+    /**
+     * The first bytes of a file. S3 is asked for only those bytes, as a streamed read depends on how PHP is set up: PHP's
+     * stream wrapper needs its own certificates, and without allow_url_fopen the whole file is downloaded instead.
+     *
+     * @throws UnableToReadFile
+     */
+    public function readStart(string $path, int $length): string
+    {
+        $disk = $this->disk();
+
+        if ($disk instanceof AwsS3V3Adapter) {
+            try {
+                return (string) $disk->getClient()->getObject([
+                    'Bucket' => $disk->getConfig()['bucket'],
+                    'Key' => $disk->path($path),
+                    'Range' => 'bytes=0-'.($length - 1),
+                ])['Body'];
+            } catch (AwsException $exception) {
+                if ($exception->getStatusCode() === Response::HTTP_REQUESTED_RANGE_NOT_SATISFIABLE) {
+                    return '';
+                }
+
+                throw UnableToReadFile::fromLocation($path, $exception->getMessage(), $exception);
+            }
+        }
+
+        $stream = $disk->readStream($path) ?? throw UnableToReadFile::fromLocation($path);
+
+        try {
+            return (string) stream_get_contents($stream, $length);
+        } finally {
+            fclose($stream);
+        }
     }
 
     /**

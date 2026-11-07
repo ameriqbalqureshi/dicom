@@ -1,4 +1,4 @@
-<x-layouts::site title="Send a payment receipt" description="Paid for a package? Send us your receipt so we can start it.">
+<x-layouts::site title="Send a payment receipt" description="Paid for a package? Send us your receipt so we can start it." :indexable="false">
     <x-site.page-header eyebrow="Payments" title="Send your payment receipt">
         Paid for a package? Send us the receipt and we will start your package as soon as we have confirmed the payment.
     </x-site.page-header>

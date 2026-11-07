@@ -96,14 +96,7 @@ class DicomArchives
 
         $this->limits->ensureStorageFor($uploader, $size);
 
-        $stream = $disk->readStream($archive->file_path);
-        $signature = $stream === null ? false : stream_get_contents($stream, strlen(self::ZIP_SIGNATURE));
-
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-
-        if ($signature !== self::ZIP_SIGNATURE) {
+        if ($this->storage->readStart($archive->file_path, strlen(self::ZIP_SIGNATURE)) !== self::ZIP_SIGNATURE) {
             throw new InvalidDicomFileException('The file is not a zip.');
         }
 

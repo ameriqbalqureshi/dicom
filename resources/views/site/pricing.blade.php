@@ -1,4 +1,4 @@
-<x-layouts::site title="Pricing" description="Simple packages for physicians, technicians and patients, with a free trial to start.">
+<x-layouts::site title="Pricing" description="DICOM viewing and sharing packages for physicians, technicians and patients. Start with a free trial, then pick the package that fits your work.">
     <x-site.page-header eyebrow="Pricing" title="Simple packages for every member of the team">
         Start with a free trial, then choose the package that fits how much you upload, share and report.
     </x-site.page-header>

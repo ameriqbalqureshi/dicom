@@ -112,31 +112,37 @@ class DicomImporter
      */
     private function parseUploadedHeader(string $path, int $size): DicomMetadata
     {
+        $copy = tmpfile();
+
         try {
-            return $this->parseStart($path, self::HEADER_BYTES);
+            fwrite($copy, $this->storage->readStart($path, self::HEADER_BYTES));
+
+            return $this->parser->parse(stream_get_meta_data($copy)['uri'], isPartial: true);
         } catch (InvalidDicomFileException $exception) {
             if ($size <= self::HEADER_BYTES) {
                 throw $exception;
             }
 
-            return $this->parseStart($path, null);
+            return $this->parseWhole($path);
+        } finally {
+            fclose($copy);
         }
     }
 
     /**
-     * Copy the first $length bytes of a file on the disk (all of it when null) to a local temporary file and parse it.
+     * Copy a whole file on the disk to a local temporary file and parse it.
      *
      * @throws InvalidDicomFileException
      */
-    private function parseStart(string $path, ?int $length): DicomMetadata
+    private function parseWhole(string $path): DicomMetadata
     {
         $source = $this->storage->disk()->readStream($path) ?? throw new InvalidDicomFileException('The uploaded file could not be read.');
         $copy = tmpfile();
 
         try {
-            stream_copy_to_stream($source, $copy, $length);
+            stream_copy_to_stream($source, $copy);
 
-            return $this->parser->parse(stream_get_meta_data($copy)['uri'], isPartial: $length !== null);
+            return $this->parser->parse(stream_get_meta_data($copy)['uri']);
         } finally {
             fclose($source);
             fclose($copy);

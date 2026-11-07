@@ -1,4 +1,4 @@
-@props(['title' => null, 'description' => null])
+@props(['title' => null, 'description' => null, 'indexable' => true])
 @php($navigation = ['home' => 'Home', 'pricing' => 'Pricing', 'about' => 'About', 'contact' => 'Contact'])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full scroll-smooth bg-slate-950">
@@ -7,17 +7,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>{{ $title ? $title.' · ' : '' }}{{ config('app.name') }}</title>
-        <meta name="description" content="{{ $description ?? config('site.tagline') }}">
-        <meta property="og:title" content="{{ $title ?? config('app.name') }}">
-        <meta property="og:description" content="{{ $description ?? config('site.tagline') }}">
-        <meta property="og:type" content="website">
-        <meta property="og:url" content="{{ url()->current() }}">
-        <link rel="canonical" href="{{ url()->current() }}">
+        @include('site.partials.seo-meta')
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+        {{ $head ?? '' }}
     </head>
     <body class="flex min-h-full flex-col text-slate-100 antialiased">
         <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur">

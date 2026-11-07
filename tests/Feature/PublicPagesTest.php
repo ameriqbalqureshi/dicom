@@ -13,6 +13,69 @@ test('guests can open every public page', function (string $routeName) {
         ->assertSee(route('login'));
 })->with(['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'payment-receipt']);
 
+test('public pages and the sign-in pages offer the share image in link previews', function (string $routeName) {
+    $this->get(route($routeName))
+        ->assertOk()
+        ->assertSee('<meta property="og:image" content="'.asset('og-image.jpg').'">', false)
+        ->assertSee('<meta name="twitter:card" content="summary_large_image">', false);
+
+    expect(public_path('og-image.jpg'))->toBeFile();
+})->with(['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'login', 'register']);
+
+test('search engines may index the marketing and sign-in pages', function (string $routeName) {
+    $this->get(route($routeName))
+        ->assertSee('<link rel="canonical" href="'.route($routeName).'">', false)
+        ->assertDontSee('name="robots"', false);
+})->with(['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'login', 'register']);
+
+test('search engines are told not to index utility pages', function (string $routeName) {
+    $this->get(route($routeName))
+        ->assertSee('<meta name="robots" content="noindex">', false)
+        ->assertDontSee('rel="canonical"', false);
+})->with(['payment-receipt', 'password.request']);
+
+test('the password reset page, whose address holds a token, is not indexed', function () {
+    $this->get(route('password.reset', ['token' => 'secret-token', 'email' => 'someone@example.com']))
+        ->assertSee('<meta name="robots" content="noindex">', false)
+        ->assertDontSee('rel="canonical"', false);
+});
+
+test('pricing variants share one canonical address', function () {
+    $this->get(route('pricing', ['for' => Role::Technician->value]))
+        ->assertSee('<link rel="canonical" href="'.route('pricing').'">', false);
+});
+
+test('the home page describes itself and its questions to search engines', function () {
+    $response = $this->get(route('home'))
+        ->assertSee('<title>Online DICOM Viewer for Coronary Angiograms · '.config('app.name').'</title>', false);
+
+    preg_match('#<script type="application/ld\+json">(.+?)</script>#s', $response->getContent(), $matches);
+    $types = collect(json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR)['@graph'])->keyBy('@type');
+
+    expect($types->keys()->all())->toContain('WebSite', 'Organization', 'WebApplication', 'FAQPage')
+        ->and($types['FAQPage']['mainEntity'][0]['name'])->toBe('Do I need to install anything?');
+});
+
+test('the sitemap lists the pages to index and nothing private', function () {
+    $response = $this->get(route('sitemap'))->assertOk();
+
+    expect($response->headers->get('Content-Type'))->toStartWith('application/xml');
+
+    $addresses = collect(simplexml_load_string($response->getContent())->xpath('//*[local-name()="loc"]'))
+        ->map(fn (SimpleXMLElement $address): string => (string) $address)
+        ->all();
+
+    expect($addresses)->toEqualCanonicalizing([
+        route('home'),
+        route('pricing'),
+        route('about'),
+        route('contact'),
+        route('privacy'),
+        route('terms'),
+        route('register'),
+    ]);
+});
+
 test('the contact page shows the contact form', function () {
     $this->get(route('contact'))->assertSeeLivewire(ContactForm::class);
 });

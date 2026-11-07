@@ -1,4 +1,4 @@
-<x-layouts::site title="About us" description="Why we built {{ config('app.name') }} and what we believe about sharing medical images.">
+<x-layouts::site title="About us" description="Why we built {{ config('app.name') }}: getting angiograms and other medical images to the right doctor as quickly as the referral, without CDs.">
     <x-site.page-header eyebrow="About us" title="Getting images to the right doctor, faster">
         We started {{ config('app.name') }} because a patient's images should travel as quickly as their referral does.
     </x-site.page-header>

@@ -58,9 +58,53 @@
         ['question' => 'What happens to patient uploads?', 'answer' => 'To protect patient privacy, studies uploaded by patients are kept for a limited time and then deleted automatically.'],
         ['question' => 'Is this a replacement for our PACS?', 'answer' => 'No. It is built for sharing and reviewing studies between people and places that do not share a PACS: referrals, second opinions and remote reporting.'],
     ];
+
+    $pageDescription = 'View, share and report DICOM angiograms and medical images in any browser. No CDs, no installs. Send studies to verified physicians. Free trial.';
+
+    $structuredData = [
+        '@context' => 'https://schema.org',
+        '@graph' => [
+            [
+                '@type' => 'WebSite',
+                'name' => config('app.name'),
+                'url' => route('home'),
+            ],
+            array_filter([
+                '@type' => 'Organization',
+                'name' => config('app.name'),
+                'url' => route('home'),
+                'logo' => asset('apple-touch-icon.png'),
+                'image' => asset('og-image.jpg'),
+                'email' => config('site.contact.email'),
+                'telephone' => config('site.contact.phone'),
+            ]),
+            [
+                '@type' => 'WebApplication',
+                'name' => config('app.name'),
+                'url' => route('home'),
+                'description' => $pageDescription,
+                'applicationCategory' => 'HealthApplication',
+                'operatingSystem' => 'Any modern web browser',
+                'browserRequirements' => 'Requires a modern web browser with JavaScript enabled',
+                'image' => asset('og-image.jpg'),
+            ],
+            [
+                '@type' => 'FAQPage',
+                'mainEntity' => array_map(fn (array $faq): array => [
+                    '@type' => 'Question',
+                    'name' => $faq['question'],
+                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq['answer']],
+                ], $faqs),
+            ],
+        ],
+    ];
 @endphp
 
-<x-layouts::site>
+<x-layouts::site title="Online DICOM Viewer for Coronary Angiograms" :description="$pageDescription">
+    <x-slot:head>
+        <script type="application/ld+json">@json($structuredData)</script>
+    </x-slot:head>
+
     {{-- Hero --}}
     <section class="relative overflow-hidden">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--color-sky-900)_0%,transparent_60%)] opacity-60" aria-hidden="true"></div>
@@ -68,7 +112,7 @@
 
         <div class="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pb-24 pt-20 sm:px-6 lg:grid-cols-2 lg:pt-28">
             <div class="flex flex-col items-start gap-6">
-                <span class="rounded-full border border-sky-800 bg-sky-950/60 px-3 py-1 text-xs font-medium text-sky-300">Built for cath labs, cardiologists and their patients</span>
+                <span class="rounded-full border border-sky-800 bg-sky-950/60 px-3 py-1 text-xs font-medium text-sky-300">Online DICOM viewer for cath labs, cardiologists and their patients</span>
                 <h1 class="text-4xl font-semibold tracking-tight text-white sm:text-6xl">
                     Medical images, <span class="bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">shared in seconds.</span>
                 </h1>
