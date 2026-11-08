@@ -9,11 +9,12 @@ use App\Models\User;
 class StudyPolicy
 {
     /**
-     * Determine whether the user can browse the study list (which only lists studies they may view).
+     * Determine whether the user can browse the study list (which only lists studies they may view). Marketing officers
+     * have nothing to do with studies.
      */
     public function viewAny(User $user): bool
     {
-        return true;
+        return ! $user->isMarketingOfficer();
     }
 
     /**
@@ -33,7 +34,7 @@ class StudyPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return ! $user->isMarketingOfficer();
     }
 
     /**

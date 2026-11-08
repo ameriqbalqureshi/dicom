@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CommentsPdfController;
+use App\Http\Controllers\CommissionStatementPdfController;
 use App\Http\Controllers\DicomArchiveChunkController;
 use App\Http\Controllers\DicomInstanceFileController;
 use App\Http\Controllers\GuestCommentsPdfController;
@@ -24,6 +25,9 @@ use App\Livewire\Billing\PackageIndex;
 use App\Livewire\Billing\PaymentAccountIndex;
 use App\Livewire\Billing\PaymentIndex;
 use App\Livewire\Guest\GuestStudy;
+use App\Livewire\Marketing\MarketingIndex;
+use App\Livewire\Marketing\OfficerDashboard;
+use App\Livewire\Marketing\OfficerShow;
 use App\Livewire\PatientRecords\PatientRecordForm;
 use App\Livewire\PatientRecords\PatientRecordIndex;
 use App\Livewire\PatientRecords\PatientRecordShow;
@@ -47,6 +51,7 @@ Route::view('/contact', 'site.contact')->name('contact');
 Route::view('/privacy', 'site.privacy')->name('privacy');
 Route::view('/terms', 'site.terms')->name('terms');
 Route::view('/payment-receipt', 'site.payment-receipt')->middleware('throttle:30,1')->name('payment-receipt');
+Route::view('/marketing-officers', 'site.marketing-officers')->middleware('throttle:30,1')->name('marketing.apply');
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 
 Route::livewire('/guest/{token}', GuestStudy::class)
@@ -129,6 +134,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/admin/payment-submissions/{paymentSubmission}/receipt', [PaymentReceiptFileController::class, 'submission'])
         ->middleware('can:manage-billing')
         ->name('payment-submissions.receipt');
+
+    Route::livewire('/marketing', OfficerDashboard::class)
+        ->middleware('can:use-marketing')
+        ->name('marketing.dashboard');
+    Route::get('/marketing/payouts/{commissionPayout}/statement', CommissionStatementPdfController::class)
+        ->name('marketing.statement');
+    Route::livewire('/admin/marketing', MarketingIndex::class)
+        ->middleware('can:manage-marketing')
+        ->name('marketing.index');
+    Route::livewire('/admin/marketing/officers/{user}', OfficerShow::class)
+        ->middleware('can:manage-marketing')
+        ->name('marketing.officers.show');
 
     Route::livewire('/users', UserIndex::class)
         ->middleware('can:manage-users')

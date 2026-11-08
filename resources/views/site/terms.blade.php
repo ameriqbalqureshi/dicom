@@ -45,6 +45,7 @@
                 <li>Prices are shown on the <a href="{{ route('pricing') }}" class="text-sky-400 hover:text-sky-300">pricing page</a> and may change; a change does not affect a package you have already bought.</li>
                 <li>A package starts when we confirm your payment and ends after its stated duration. Packages do not renew automatically.</li>
                 <li>Payments are non-refundable except where the law requires otherwise or we agree in writing.</li>
+                <li>If you sign up with a marketing officer's referral link or code, they may earn a commission on your payments. This does not change what you pay.</li>
             </ul>
         </section>
 

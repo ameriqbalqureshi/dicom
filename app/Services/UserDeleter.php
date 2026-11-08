@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Storage;
 /**
  * Deletes a user together with everything that belongs to them: the studies they uploaded (with their files, reports,
  * shares and guest links), every share they made or received, their patient records, their signature image and their
- * payment receipts. Reports they wrote on other people's studies are kept, without an author.
+ * payment receipts. Reports they wrote on other people's studies are kept, without an author. Commission records keep
+ * their own copy of the names involved, so the accounts stay correct.
  */
 class UserDeleter
 {

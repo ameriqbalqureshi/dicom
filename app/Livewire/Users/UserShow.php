@@ -6,8 +6,10 @@ use App\Livewire\Users\Concerns\ManagesUsers;
 use App\Models\Package;
 use App\Models\User;
 use App\Services\Billing\PackageLimits;
+use App\Services\Marketing\MarketingOfficers;
 use App\Services\UserDeleter;
 use Illuminate\Contracts\View\View;
+use InvalidArgumentException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -34,6 +36,28 @@ class UserShow extends Component
         }
     }
 
+    /**
+     * Change which marketing officer this user belongs to as a client. An empty value means none.
+     */
+    public function assignReferrer(string $officerId, MarketingOfficers $officers): void
+    {
+        $this->authorize('manage-marketing');
+
+        $officer = $officerId === '' ? null : User::query()->marketingOfficers()->findOrFail((int) $officerId);
+
+        try {
+            $officers->assignClient($this->user->refresh(), $officer, auth()->user());
+        } catch (InvalidArgumentException $exception) {
+            $this->addError('users', $exception->getMessage());
+
+            return;
+        }
+
+        $this->status = $officer === null
+            ? "{$this->user->name} no longer belongs to a marketing officer."
+            : "{$this->user->name} now belongs to {$officer->name}. Their future payments earn this officer commission.";
+    }
+
     public function render(PackageLimits $limits): View
     {
         $user = $this->user->refresh();
@@ -54,6 +78,8 @@ class UserShow extends Component
             'subscriptions' => $user->subscriptions()->with('package')->latest()->get(),
             'packages' => Package::query()->where('role', $user->role)->orderByDesc('is_trial')->orderBy('price')->get(),
             'currency' => config('billing.currency'),
+            'officers' => $user->canBeReferred() ? User::query()->marketingOfficers()->orderBy('name')->get() : collect(),
+            'referralChanges' => $user->referralChanges()->with('changedBy')->latest()->latest('id')->get(),
         ])->title($user->name);
     }
 }

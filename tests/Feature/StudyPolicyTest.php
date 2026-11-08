@@ -4,12 +4,19 @@ use App\Enums\Role;
 use App\Models\Study;
 use App\Models\User;
 
-test('every role can browse the study list and upload studies', function (Role $role) {
+test('every role that works with studies can browse the study list and upload studies', function (Role $role) {
     $user = User::factory()->create(['role' => $role]);
 
     expect($user->can('viewAny', Study::class))->toBeTrue()
         ->and($user->can('create', Study::class))->toBeTrue();
-})->with(Role::cases());
+})->with([Role::Admin, Role::Technician, Role::Physician, Role::Patient]);
+
+test('marketing officers cannot browse the study list or upload studies', function () {
+    $user = User::factory()->marketingOfficer()->create();
+
+    expect($user->can('viewAny', Study::class))->toBeFalse()
+        ->and($user->can('create', Study::class))->toBeFalse();
+});
 
 test('uploaders can view and delete their own studies', function (Role $role) {
     $user = User::factory()->create(['role' => $role]);

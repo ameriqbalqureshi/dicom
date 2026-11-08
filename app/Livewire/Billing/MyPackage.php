@@ -41,7 +41,7 @@ class MyPackage extends Component
 
     public function mount(): void
     {
-        abort_if(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->usesPackages(), 403);
     }
 
     public function choose(int $packageId): void

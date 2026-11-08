@@ -11,6 +11,7 @@ use App\Notifications\PackageStarted;
 use App\Notifications\PaymentRejected;
 use App\Notifications\PaymentSubmitted;
 use App\Services\BestEffortNotifier;
+use App\Services\Marketing\CommissionManager;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +23,8 @@ use InvalidArgumentException;
  */
 class SubscriptionManager
 {
+    public function __construct(private CommissionManager $commissions) {}
+
     /**
      * Give a new user their role's trial package, if there is one.
      */
@@ -129,14 +132,18 @@ class SubscriptionManager
     }
 
     /**
-     * Confirm the payment for a purchase and activate it.
+     * Confirm the payment for a purchase and activate it, crediting the marketing officer who brought the buyer in.
      */
     public function approve(Subscription $subscription, User $reviewer): Subscription
     {
         $this->ensurePending($subscription);
 
         $subscription->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()]);
-        $this->activate($subscription);
+
+        DB::transaction(function () use ($subscription): void {
+            $this->activate($subscription);
+            $this->commissions->recordForPayment($subscription);
+        });
 
         BestEffortNotifier::send($subscription->user, new PackageStarted($subscription));
 

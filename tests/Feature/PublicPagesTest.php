@@ -73,6 +73,7 @@ test('the sitemap lists the pages to index and nothing private', function () {
         route('privacy'),
         route('terms'),
         route('register'),
+        route('marketing.apply'),
     ]);
 });
 

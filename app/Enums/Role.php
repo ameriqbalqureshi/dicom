@@ -8,6 +8,7 @@ enum Role: string
     case Technician = 'technician';
     case Physician = 'physician';
     case Patient = 'patient';
+    case MarketingOfficer = 'marketing_officer';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum Role: string
             self::Technician => 'Technician',
             self::Physician => 'Physician',
             self::Patient => 'Patient',
+            self::MarketingOfficer => 'Marketing Officer',
         };
     }
 }

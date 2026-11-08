@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\PhysicianVerified;
 use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
+use App\Services\Marketing\MarketingOfficers;
 use App\Services\StudySharing;
 use App\Services\UserDeleter;
 use Illuminate\Support\Facades\Validator;
@@ -22,9 +23,11 @@ trait ManagesUsers
     public ?string $status = null;
 
     /**
-     * Change a user's role. Only physicians can receive shared studies, so anyone who stops being one loses them.
+     * Change a user's role. Only physicians can receive shared studies, so anyone who stops being one loses them. Someone
+     * who becomes a marketing officer gets a referral code and stops being a client, and an officer must be settled up
+     * with before they stop being one.
      */
-    public function updateRole(int $userId, string $role, StudySharing $sharing): void
+    public function updateRole(int $userId, string $role, StudySharing $sharing, MarketingOfficers $officers): void
     {
         $this->authorize('manage-users');
 
@@ -38,7 +41,18 @@ trait ManagesUsers
             return;
         }
 
+        if ($role !== Role::MarketingOfficer->value && $user->hasUnsettledCommissions()) {
+            $this->addError('users', "{$user->name} still has commission that has not been paid. Pay or reverse it first.");
+
+            return;
+        }
+
         $user->update(['role' => $role]);
+
+        if ($user->isMarketingOfficer()) {
+            $officers->ensureProfile($user);
+            $user->forceFill(['referred_by' => null])->save();
+        }
 
         if (! $user->isPhysician()) {
             $sharing->revokeReceivedBy($user);
@@ -129,6 +143,12 @@ trait ManagesUsers
 
         if ($user->is(auth()->user())) {
             $this->addError('users', 'You cannot delete your own account.');
+
+            return null;
+        }
+
+        if ($user->hasUnsettledCommissions()) {
+            $this->addError('users', "{$user->name} still has commission that has not been paid. Pay or reverse it first.");
 
             return null;
         }

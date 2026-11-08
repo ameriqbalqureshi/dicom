@@ -58,6 +58,15 @@
         </section>
 
         <section>
+            <h2>Who can see that a marketing officer referred you</h2>
+            <p>
+                If you sign up with a marketing officer's referral link or code, they can see your name (shortened to your first name and an
+                initial if you are a patient), your account type, when you signed up, your current package and the amounts you pay. They cannot
+                see your email address, studies, reports, patient records or how you use the service.
+            </p>
+        </section>
+
+        <section>
             <h2>How long we keep data</h2>
             <ul>
                 <li>Patient records are kept until the physician deletes them or their account is closed, which deletes them permanently.</li>

@@ -23,12 +23,12 @@ function dicomUpload(string $name, ?DicomFileBuilder $builder = null): UploadedF
     return UploadedFile::fake()->createWithContent($name, ($builder ?? new DicomFileBuilder)->build());
 }
 
-test('every role can open the upload page', function (Role $role) {
+test('every role that works with studies can open the upload page', function (Role $role) {
     $this->actingAs(User::factory()->create(['role' => $role]))
         ->get(route('studies.upload'))
         ->assertOk()
         ->assertSeeLivewire(UploadStudies::class);
-})->with(Role::cases());
+})->with([Role::Admin, Role::Technician, Role::Physician, Role::Patient]);
 
 test('uploading a DICOM file immediately creates its study, series and instance', function () {
     $technician = User::factory()->technician()->create();

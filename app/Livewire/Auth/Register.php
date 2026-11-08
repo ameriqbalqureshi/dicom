@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Notifications\PhysicianSignedUp;
 use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
+use App\Services\Marketing\MarketingOfficers;
+use Closure;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -41,6 +43,18 @@ class Register extends Component
     public string $qualifications = '';
 
     /**
+     * The code of the marketing officer who brought this person in, filled in from their referral link.
+     */
+    public string $referralCode = '';
+
+    public function mount(): void
+    {
+        $linkedCode = request()->query('ref');
+
+        $this->referralCode = is_string($linkedCode) ? mb_substr(mb_strtoupper(trim($linkedCode)), 0, 20) : '';
+    }
+
+    /**
      * The roles people may choose when signing up.
      *
      * @return list<Role>
@@ -62,6 +76,16 @@ class Register extends Component
             'role' => ['required', Rule::in(array_map(fn (Role $role) => $role->value, self::selfServiceRoles()))],
             'registrationNumber' => [Rule::requiredIf($this->role === Role::Physician->value), 'nullable', 'string', 'max:100'],
             'qualifications' => ['nullable', 'string', 'max:255'],
+            'referralCode' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, Closure $fail): void {
+                $officers = app(MarketingOfficers::class);
+                $officer = $officers->findByReferralCode((string) $value);
+
+                if ($officer === null) {
+                    $fail('We do not recognise this referral code. Check it, or leave it empty.');
+                } elseif ($officers->isSameMailbox($officer, $this->email)) {
+                    $fail('This referral code cannot be used with this email address.');
+                }
+            }],
         ];
     }
 
@@ -75,12 +99,13 @@ class Register extends Component
         ];
     }
 
-    public function register(SubscriptionManager $subscriptions): void
+    public function register(SubscriptionManager $subscriptions, MarketingOfficers $officers): void
     {
         $validated = $this->validate();
         $isPhysician = $validated['role'] === Role::Physician->value;
+        $referrer = filled($validated['referralCode']) ? $officers->findByReferralCode($validated['referralCode']) : null;
 
-        $user = DB::transaction(function () use ($validated, $isPhysician, $subscriptions): User {
+        $user = DB::transaction(function () use ($validated, $isPhysician, $subscriptions, $referrer): User {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -89,6 +114,10 @@ class Register extends Component
                 'registration_number' => $isPhysician ? trim($validated['registrationNumber']) : null,
                 'qualifications' => $isPhysician && filled($validated['qualifications']) ? trim($validated['qualifications']) : null,
             ]);
+
+            if ($referrer !== null) {
+                $user->forceFill(['referred_by' => $referrer->id])->save();
+            }
 
             $subscriptions->startTrial($user);
 

@@ -86,6 +86,31 @@
                     </dd>
                 </div>
 
+                @if ($user->isMarketingOfficer())
+                    <div class="flex flex-col gap-1">
+                        <dt class="text-slate-400">Marketing</dt>
+                        <dd><a href="{{ route('marketing.officers.show', $user) }}" class="text-sky-400 hover:text-sky-300">Open officer page</a></dd>
+                    </div>
+                @elseif ($user->canBeReferred())
+                    <div class="flex flex-col gap-1">
+                        <dt class="text-slate-400">Marketing officer</dt>
+                        <dd class="flex flex-col gap-1">
+                            <select wire:change="assignReferrer($event.target.value)" aria-label="Marketing officer for {{ $user->name }}"
+                                class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
+                                <option value="">None</option>
+                                @foreach ($officers as $officerOption)
+                                    <option value="{{ $officerOption->id }}" @selected($user->referred_by === $officerOption->id)>{{ $officerOption->name }}</option>
+                                @endforeach
+                            </select>
+                            @foreach ($referralChanges as $referralChange)
+                                <span wire:key="referral-change-{{ $referralChange->id }}" class="text-xs text-slate-400">
+                                    {{ $referralChange->created_at->toFormattedDateString() }}: {{ $referralChange->from_officer_name ?? 'None' }} &rarr; {{ $referralChange->to_officer_name ?? 'None' }}{{ $referralChange->changedBy ? ', by '.$referralChange->changedBy->name : '' }}
+                                </span>
+                            @endforeach
+                        </dd>
+                    </div>
+                @endif
+
                 <div class="flex flex-col gap-1">
                     <dt class="text-slate-400">Signed up</dt>
                     <dd>{{ $user->created_at->toFormattedDateString() }} <span class="text-slate-400">({{ $user->created_at->diffForHumans() }})</span></dd>
@@ -118,8 +143,8 @@
 
         <section class="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h2 class="font-semibold">Package</h2>
-            @if ($user->isAdmin())
-                <p class="text-sm text-slate-400">Administrators do not need a package.</p>
+            @if (! $user->usesPackages())
+                <p class="text-sm text-slate-400">{{ $user->isAdmin() ? 'Administrators' : 'Marketing officers' }} do not need a package.</p>
             @else
                 @php($current = $subscriptions->first(fn ($subscription) => $subscription->isCurrent()))
                 <div class="text-sm">

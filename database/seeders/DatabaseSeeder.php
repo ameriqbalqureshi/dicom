@@ -72,6 +72,11 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin@example.com',
         ]);
 
+        User::factory()->marketingOfficer()->create([
+            'name' => 'Marketing Officer',
+            'email' => 'marketing@example.com',
+        ]);
+
         foreach ([Role::Physician, Role::Technician, Role::Patient] as $role) {
             $user = User::create([
                 'name' => "{$role->label()} User",

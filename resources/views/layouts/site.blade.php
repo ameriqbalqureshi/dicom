@@ -88,6 +88,7 @@
                     <h2 class="font-medium text-white">Company</h2>
                     <a href="{{ route('about') }}" class="text-slate-400 hover:text-white">About us</a>
                     <a href="{{ route('contact') }}" class="text-slate-400 hover:text-white">Contact</a>
+                    <a href="{{ route('marketing.apply') }}" class="text-slate-400 hover:text-white">Become a marketing officer</a>
                     <a href="{{ route('privacy') }}" class="text-slate-400 hover:text-white">Privacy policy</a>
                     <a href="{{ route('terms') }}" class="text-slate-400 hover:text-white">Terms of service</a>
                 </div>

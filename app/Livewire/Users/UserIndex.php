@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\AccountCreated;
 use App\Services\BestEffortNotifier;
 use App\Services\Billing\SubscriptionManager;
+use App\Services\Marketing\MarketingOfficers;
 use App\Services\UserDeleter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -82,9 +83,9 @@ class UserIndex extends Component
 
     /**
      * Create an account and email the person about it. The administrator vouches for the email address, and for
-     * physicians' registration, and everyone except administrators starts on their role's trial package.
+     * physicians' registration, and everyone who uses packages starts on their role's trial package.
      */
-    public function createUser(SubscriptionManager $subscriptions): void
+    public function createUser(SubscriptionManager $subscriptions, MarketingOfficers $officers): void
     {
         $this->authorize('manage-users');
 
@@ -95,7 +96,11 @@ class UserIndex extends Component
             $user->markPhysicianVerified();
         }
 
-        if (! $user->isAdmin()) {
+        if ($user->isMarketingOfficer()) {
+            $officers->ensureProfile($user);
+        }
+
+        if ($user->usesPackages()) {
             $subscriptions->startTrial($user);
         }
 

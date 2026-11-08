@@ -13,7 +13,7 @@ class SitemapController extends Controller
     {
         return response()
             ->view('site.sitemap', [
-                'routeNames' => ['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'register'],
+                'routeNames' => ['home', 'pricing', 'about', 'contact', 'privacy', 'terms', 'register', 'marketing.apply'],
             ])
             ->header('Content-Type', 'application/xml');
     }

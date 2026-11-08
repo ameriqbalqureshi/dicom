@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\Role;
+use App\Models\MarketingProfile;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -44,7 +45,7 @@ class UserFactory extends Factory
     public function configure(): static
     {
         return $this->afterCreating(function (User $user): void {
-            if (! $user->isAdmin()) {
+            if ($user->usesPackages()) {
                 Subscription::factory()->for($user)->create();
             }
         });
@@ -94,6 +95,16 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'role' => Role::Admin,
         ]);
+    }
+
+    /**
+     * Indicate that the user is a working marketing officer, with a referral code.
+     */
+    public function marketingOfficer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::MarketingOfficer,
+        ])->afterCreating(fn (User $user) => MarketingProfile::factory()->for($user)->create());
     }
 
     public function physician(): static

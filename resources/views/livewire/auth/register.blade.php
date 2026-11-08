@@ -57,6 +57,13 @@
                 class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
         </div>
 
+        <div class="flex flex-col gap-1.5">
+            <label for="referralCode" class="text-sm text-slate-300">Referral code <span class="text-slate-500">(optional)</span></label>
+            <input wire:model="referralCode" id="referralCode" type="text" maxlength="20" autocomplete="off"
+                class="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm uppercase focus:border-sky-500 focus:outline-none">
+            @error('referralCode') <p class="text-sm text-red-400">{{ $message }}</p> @enderror
+        </div>
+
         <p class="text-xs text-slate-400">
             You start with a free trial. Choose a package any time to do more.
             @if ($role === App\Enums\Role::Physician->value)

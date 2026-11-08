@@ -30,8 +30,17 @@ class StudyIndex extends Component
     #[Url(except: null)]
     public ?int $from = null;
 
+    /**
+     * This is where people land after signing in, so marketing officers are sent on to their own page.
+     */
     public function mount(): void
     {
+        if (auth()->user()->isMarketingOfficer()) {
+            $this->redirectRoute('marketing.dashboard');
+
+            return;
+        }
+
         $this->authorize('viewAny', Study::class);
     }
 

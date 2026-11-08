@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CommissionStatus;
 use App\Enums\Role;
 use App\Notifications\Auth\ResetPasswordNotification;
 use App\Notifications\Auth\VerifyEmailNotification;
@@ -10,7 +11,9 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
@@ -127,6 +130,119 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isPhysician(): bool
     {
         return $this->role === Role::Physician;
+    }
+
+    public function isMarketingOfficer(): bool
+    {
+        return $this->role === Role::MarketingOfficer;
+    }
+
+    /**
+     * Whether the user works with studies and so has packages. Administrators and marketing officers do not.
+     */
+    public function usesPackages(): bool
+    {
+        return ! $this->isAdmin() && ! $this->isMarketingOfficer();
+    }
+
+    /**
+     * Whether the user can be a marketing officer's client.
+     */
+    public function canBeReferred(): bool
+    {
+        return $this->usesPackages();
+    }
+
+    /**
+     * The name marketing officers see for this user. Patients' surnames are shortened, because who uses the service as a
+     * patient is health information.
+     */
+    public function nameForMarketing(): string
+    {
+        if ($this->role !== Role::Patient) {
+            return $this->name;
+        }
+
+        $nameParts = preg_split('/\s+/u', trim($this->name));
+        $firstName = array_shift($nameParts);
+
+        return $nameParts === []
+            ? $firstName
+            : $firstName.' '.mb_strtoupper(mb_substr((string) end($nameParts), 0, 1)).'.';
+    }
+
+    /**
+     * Whether this officer has commission that has not been paid or cancelled yet.
+     */
+    public function hasUnsettledCommissions(): bool
+    {
+        return $this->commissions()->where('status', CommissionStatus::Pending)->exists();
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     */
+    public function scopeMarketingOfficers(Builder $query): void
+    {
+        $query->where('role', Role::MarketingOfficer);
+    }
+
+    /**
+     * @return HasOne<MarketingProfile, $this>
+     */
+    public function marketingProfile(): HasOne
+    {
+        return $this->hasOne(MarketingProfile::class);
+    }
+
+    /**
+     * The marketing officer who brought this user in.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'referred_by');
+    }
+
+    /**
+     * The clients this marketing officer brought in.
+     *
+     * @return HasMany<User, $this>
+     */
+    public function referredClients(): HasMany
+    {
+        return $this->hasMany(self::class, 'referred_by');
+    }
+
+    /**
+     * What this marketing officer has earned.
+     *
+     * @return HasMany<Commission, $this>
+     */
+    public function commissions(): HasMany
+    {
+        return $this->hasMany(Commission::class, 'officer_id');
+    }
+
+    /**
+     * What this marketing officer has been paid.
+     *
+     * @return HasMany<CommissionPayout, $this>
+     */
+    public function commissionPayouts(): HasMany
+    {
+        return $this->hasMany(CommissionPayout::class, 'officer_id');
+    }
+
+    /**
+     * Changes administrators have made to which officer this client belongs to.
+     *
+     * @return HasMany<ReferralChange, $this>
+     */
+    public function referralChanges(): HasMany
+    {
+        return $this->hasMany(ReferralChange::class, 'client_id');
     }
 
     /**

@@ -12,14 +12,22 @@
         <nav class="border-b border-slate-800 bg-slate-900">
             <div class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3">
                 <div class="flex items-center gap-6">
-                    <a href="{{ route('studies.index') }}" class="font-semibold tracking-tight text-white">
+                    <a href="{{ route(auth()->user()->isMarketingOfficer() ? 'marketing.dashboard' : 'studies.index') }}" class="font-semibold tracking-tight text-white">
                         {{ config('app.name') }}
                     </a>
 
                     <div class="flex items-center gap-1 text-sm">
-                        <x-nav-link :href="route('studies.index')" :active="request()->routeIs('studies.index', 'studies.show')">
-                            Studies
-                        </x-nav-link>
+                        @can('use-marketing')
+                            <x-nav-link :href="route('marketing.dashboard')" :active="request()->routeIs('marketing.dashboard')">
+                                Marketing
+                            </x-nav-link>
+                        @endcan
+
+                        @can('viewAny', App\Models\Study::class)
+                            <x-nav-link :href="route('studies.index')" :active="request()->routeIs('studies.index', 'studies.show')">
+                                Studies
+                            </x-nav-link>
+                        @endcan
 
                         @can('create', App\Models\Study::class)
                             <x-nav-link :href="route('studies.upload')" :active="request()->routeIs('studies.upload')">
@@ -67,13 +75,23 @@
                                 Payment accounts
                             </x-nav-link>
                         @endcan
+
+                        @can('manage-marketing')
+                            <x-nav-link :href="route('marketing.index')" :active="request()->routeIs('marketing.index', 'marketing.officers.show')">
+                                Marketing
+                                @php($pendingApplicationCount = App\Models\MarketingApplication::pending()->count())
+                                @if ($pendingApplicationCount > 0)
+                                    <span class="ml-1 rounded-full bg-sky-600 px-1.5 text-xs text-white">{{ $pendingApplicationCount }}</span>
+                                @endif
+                            </x-nav-link>
+                        @endcan
                     </div>
                 </div>
 
                 <div class="flex items-center gap-4 text-sm">
-                    @unless (auth()->user()->isAdmin())
+                    @if (auth()->user()->usesPackages())
                         <a href="{{ route('package.show') }}" class="{{ request()->routeIs('package.show') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Package</a>
-                    @endunless
+                    @endif
 
                     <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.edit') ? 'text-white' : 'text-slate-400 hover:text-white' }}">Profile</a>
 
